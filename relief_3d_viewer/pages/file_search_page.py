@@ -1,7 +1,7 @@
 # === pages/file_search_page.py ===
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog,
-    QFileSystemModel, QTreeView, QListWidget, QHBoxLayout, QSplitter
+    QWidget, QVBoxLayout, QLabel, QPushButton,
+    QFileSystemModel, QTreeView, QListWidget, QSplitter, QFileDialog
 )
 from PyQt5.QtCore import Qt, QModelIndex
 import os
@@ -18,12 +18,12 @@ class FileSearchPage(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
 
-        # Ліва панель — дерево файлової системи
+        # Ліва панель — дерево файлової системи (всі диски)
         self.dir_model = QFileSystemModel()
         self.dir_model.setRootPath("")
         self.dir_view = QTreeView()
         self.dir_view.setModel(self.dir_model)
-        self.dir_view.setRootIndex(self.dir_model.index(os.path.expanduser("~")))
+        self.dir_view.setRootIndex(self.dir_model.index(""))  # Показати всі диски
         self.dir_view.clicked.connect(self.on_tree_clicked)
         splitter.addWidget(self.dir_view)
 
@@ -38,18 +38,20 @@ class FileSearchPage(QWidget):
         main_layout.addWidget(splitter)
 
         # Нижні кнопки
-        btn = QPushButton("Обрати .obj файл вручну")
+        btn = QPushButton("📂 Обрати .obj файл вручну")
         btn.clicked.connect(self.open_file_dialog)
         main_layout.addWidget(btn)
 
         back_btn = QPushButton("← Назад")
-        back_btn.clicked.connect(lambda: navigate_to("home"))
+        back_btn.clicked.connect(lambda: self.navigate_to("home"))
         main_layout.addWidget(back_btn)
 
         self.setLayout(main_layout)
 
     def open_file_dialog(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Обрати модель .obj", "", "OBJ файли (*.obj)")
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "Обрати модель .obj", "", "OBJ файли (*.obj)"
+        )
         if file_name:
             self.set_obj_file(file_name)
 
@@ -64,6 +66,7 @@ class FileSearchPage(QWidget):
     def set_obj_file(self, path):
         self.set_obj_callback(path)
         self.navigate_to("viewer")
+
         if path not in self.history:
             self.history.append(path)
             self.history_list.addItem(path)

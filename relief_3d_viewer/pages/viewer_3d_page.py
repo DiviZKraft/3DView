@@ -10,17 +10,15 @@ from utils.model_loader import load_obj_with_texture
 class SimpleGLWidget(QOpenGLWidget):
     def __init__(self, info_label):
         super().__init__()
-        self.angle_x = 0
-        self.angle_y = 0
-        self.zoom = -5
-        self.last_x = 0
-        self.last_y = 0
+        self.camera_pos = [0.0, 0.0, 5.0]
+        self.camera_rot = [0.0, 0.0]
         self.model = ([], [])
         self.texture_id = None
-        self.setAcceptDrops(True)
-        self.setMouseTracking(True)
-        self.bounding_box = []
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setMouseTracking(True)
+        self.last_x = 0
+        self.last_y = 0
+        self.mouse_pressed = False
         self.wireframe = False
         self.info_label = info_label
 
@@ -31,7 +29,6 @@ class SimpleGLWidget(QOpenGLWidget):
         try:
             self.model, texture_path = load_obj_with_texture(path)
             self.update_info()
-            self.compute_bounding_box()
             if texture_path and os.path.exists(texture_path):
                 self.load_texture(texture_path)
             else:
@@ -67,56 +64,36 @@ class SimpleGLWidget(QOpenGLWidget):
         glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
         glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 64.0)
 
-    def update_light(self):
-        az = math.radians(self.light_azimuth)
-        el = math.radians(self.light_elevation)
-        x = math.cos(el) * math.cos(az)
-        y = math.sin(el)
-        z = math.cos(el) * math.sin(az)
-        glLightfv(GL_LIGHT0, GL_POSITION, [x * 10, y * 10, z * 10, 1.0])
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
-        glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(45.0, w / h if h != 0 else 1, 1.0, 100.0)
+        gluPerspective(45.0, w / h if h != 0 else 1, 0.1, 100.0)
         glMatrixMode(GL_MODELVIEW)
 
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        glTranslatef(0.0, 0.0, self.zoom)
-        glRotatef(self.angle_x, 1.0, 0.0, 0.0)
-        glRotatef(self.angle_y, 0.0, 1.0, 0.0)
+        glTranslatef(-self.camera_pos[0], -self.camera_pos[1], -self.camera_pos[2])
+        glRotatef(self.camera_rot[0], 1.0, 0.0, 0.0)
+        glRotatef(self.camera_rot[1], 0.0, 1.0, 0.0)
 
         self.update_light()
 
         vertices, faces = self.model
-
-        glEnable(GL_LIGHTING)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
-
+        glBegin(GL_TRIANGLES)
         for face in faces:
-            if len(face) < 3:
-                continue
-            glBegin(GL_POLYGON)
-            normal = self.compute_face_normal([vertices[i] for i in face])
-            glNormal3fv(normal)
-            for idx in face:
-                glVertex3fv(vertices[idx])
-            glEnd()
-
-        if self.bounding_box:
-            glDisable(GL_LIGHTING)
-            glColor3f(1, 0, 0)
-            glBegin(GL_LINES)
-            for edge in self.bounding_box:
-                for vertex in edge:
-                    glVertex3fv(vertex)
-            glEnd()
-            glEnable(GL_LIGHTING)
+            if len(face) >= 3:
+                v0 = vertices[face[0]]
+                v1 = vertices[face[1]]
+                v2 = vertices[face[2]]
+                normal = self.compute_face_normal([v0, v1, v2])
+                glNormal3fv(normal)
+                glVertex3fv(v0)
+                glVertex3fv(v1)
+                glVertex3fv(v2)
+        glEnd()
 
     def compute_face_normal(self, verts):
         if len(verts) < 3:
@@ -128,59 +105,62 @@ class SimpleGLWidget(QOpenGLWidget):
             v1[2] * v2[0] - v1[0] * v2[2],
             v1[0] * v2[1] - v1[1] * v2[0]
         ]
-        length = sum([n ** 2 for n in normal]) ** 0.5
-        if length == 0:
-            return [0, 0, 1]
-        return [n / length for n in normal]
+        length = math.sqrt(sum(n * n for n in normal))
+        return [n / length for n in normal] if length else [0, 0, 1]
 
     def mousePressEvent(self, event):
+        self.mouse_pressed = True
         self.last_x = event.x()
         self.last_y = event.y()
 
+    def mouseReleaseEvent(self, event):
+        self.mouse_pressed = False
+
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton:
+        if self.mouse_pressed:
             dx = event.x() - self.last_x
             dy = event.y() - self.last_y
-            self.angle_x += dy * 0.5
-            self.angle_y += dx * 0.5
+            self.camera_rot[0] += dy * 0.5
+            self.camera_rot[1] += dx * 0.5
             self.update()
         self.last_x = event.x()
         self.last_y = event.y()
 
     def wheelEvent(self, event):
-        delta = event.angleDelta().y() / 120
-        self.zoom += delta * 0.2
+        self.camera_pos[2] -= event.angleDelta().y() / 240
         self.update()
 
-    def compute_bounding_box(self):
-        vertices, _ = self.model
-        if not vertices:
-            return
-        xs = [v[0] for v in vertices]
-        ys = [v[1] for v in vertices]
-        zs = [v[2] for v in vertices]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        min_z, max_z = min(zs), max(zs)
-        corners = [
-            (min_x, min_y, min_z), (max_x, min_y, min_z),
-            (max_x, max_y, min_z), (min_x, max_y, min_z),
-            (min_x, min_y, max_z), (max_x, min_y, max_z),
-            (max_x, max_y, max_z), (min_x, max_y, max_z)
-        ]
-        edges = [
-            (corners[0], corners[1]), (corners[1], corners[2]), (corners[2], corners[3]), (corners[3], corners[0]),
-            (corners[4], corners[5]), (corners[5], corners[6]), (corners[6], corners[7]), (corners[7], corners[4]),
-            (corners[0], corners[4]), (corners[1], corners[5]), (corners[2], corners[6]), (corners[3], corners[7])
-        ]
-        self.bounding_box = edges
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key == Qt.Key_W:
+            self.camera_pos[2] -= 0.2
+        elif key == Qt.Key_S:
+            self.camera_pos[2] += 0.2
+        elif key == Qt.Key_A:
+            self.camera_pos[0] -= 0.2
+        elif key == Qt.Key_D:
+            self.camera_pos[0] += 0.2
+        elif key == Qt.Key_Q:
+            self.camera_pos[1] -= 0.2
+        elif key == Qt.Key_E:
+            self.camera_pos[1] += 0.2
+        self.update()
+
+    def update_light(self):
+        az = math.radians(self.light_azimuth)
+        el = math.radians(self.light_elevation)
+        x = math.cos(el) * math.cos(az)
+        y = math.sin(el)
+        z = math.cos(el) * math.sin(az)
+        glLightfv(GL_LIGHT0, GL_POSITION, [x * 10, y * 10, z * 10, 1.0])
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
+        glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
 
 class Viewer3DPage(QWidget):
     def __init__(self, go_back_callback):
         super().__init__()
         layout = QHBoxLayout()
 
-        # Ліві повзунки
         left_controls = QVBoxLayout()
         az_slider = QSlider(Qt.Vertical)
         az_slider.setMinimum(0)
@@ -213,16 +193,14 @@ class Viewer3DPage(QWidget):
         export_btn.clicked.connect(self.export_info)
         controls.addWidget(export_btn)
 
-        center_layout.addLayout(controls)
-
         if self.go_back_callback:
             back_btn = QPushButton("⬅️ Назад")
             back_btn.clicked.connect(lambda: self.go_back_callback("home"))
-            center_layout.addWidget(back_btn)
+            controls.addWidget(back_btn)
 
+        center_layout.addLayout(controls)
         layout.addLayout(center_layout)
 
-        # Праві повзунки
         right_controls = QVBoxLayout()
         el_slider = QSlider(Qt.Vertical)
         el_slider.setMinimum(-90)
