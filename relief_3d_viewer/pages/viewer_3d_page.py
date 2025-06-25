@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QOpenGLWidget, QHBoxLayout, QFileDialog, QSlider, QMessageBox
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from PIL import Image
@@ -31,6 +31,7 @@ class SimpleGLWidget(QOpenGLWidget):
     def load_model(self, path):
         try:
             self.model, texture_path = load_obj_with_texture(path)
+            self.reset_view_to_model()
             self.update_info()
             if texture_path and os.path.exists(texture_path):
                 self.load_texture(texture_path)
@@ -39,6 +40,24 @@ class SimpleGLWidget(QOpenGLWidget):
             self.update()
         except Exception as e:
             QMessageBox.critical(self, "Помилка моделі", str(e))
+
+    def reset_view_to_model(self):
+        vertices, _ = self.model
+        if not vertices:
+            return
+        xs = [v[0] for v in vertices]
+        ys = [v[1] for v in vertices]
+        zs = [v[2] for v in vertices]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        min_z, max_z = min(zs), max(zs)
+        self.target = [
+            (min_x + max_x) / 2,
+            (min_y + max_y) / 2,
+            (min_z + max_z) / 2
+        ]
+        size = max(max_x - min_x, max_y - min_y, max_z - min_z)
+        self.distance = size * 1.5 if size > 0 else 5.0
 
     def load_texture(self, image_path):
         image = Image.open(image_path)
@@ -57,6 +76,7 @@ class SimpleGLWidget(QOpenGLWidget):
         self.info_label.setText(f"Вершин: {len(vertices)} | Граней: {len(faces)}")
 
     def initializeGL(self):
+        glClearColor(1.0, 1.0, 1.0, 1.0)  # світлий фон
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
@@ -71,7 +91,7 @@ class SimpleGLWidget(QOpenGLWidget):
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(45.0, w / h if h != 0 else 1, 0.1, 100.0)
+        gluPerspective(45.0, w / h if h != 0 else 1, 0.1, 1000.0)
         glMatrixMode(GL_MODELVIEW)
 
     def paintGL(self):
@@ -141,7 +161,6 @@ class SimpleGLWidget(QOpenGLWidget):
 
     def pan_camera(self, dx, dy):
         right = [math.cos(math.radians(self.azimuth)), 0, -math.sin(math.radians(self.azimuth))]
-        up = [0, 1, 0]
         scale = 0.01 * self.distance
         self.target[0] -= right[0] * dx * scale
         self.target[1] += dy * scale
@@ -180,9 +199,6 @@ class SimpleGLWidget(QOpenGLWidget):
 
 
 
-
-
-
 class Viewer3DPage(QWidget):
     def __init__(self, go_back_callback):
         super().__init__()
@@ -194,13 +210,13 @@ class Viewer3DPage(QWidget):
         az_slider.setMaximum(360)
         az_slider.setValue(45)
         az_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'az'))
-        left_controls.addWidget(QLabel("☀️ Азимут"))
+        left_controls.addWidget(QLabel("\u2600\ufe0f Азимут"))
         left_controls.addWidget(az_slider)
         layout.addLayout(left_controls)
 
         center_layout = QVBoxLayout()
         self.go_back_callback = go_back_callback
-        self.info_label = QLabel("ℹ️ Інформація про модель")
+        self.info_label = QLabel("\u2139\ufe0f Інформація про модель")
         center_layout.addWidget(self.info_label)
 
         self.gl_widget = SimpleGLWidget(self.info_label)
@@ -208,20 +224,16 @@ class Viewer3DPage(QWidget):
 
         controls = QHBoxLayout()
 
-        wire_btn = QPushButton("🔳 Wireframe/Solid")
+        wire_btn = QPushButton("\ud83d\udd33 Wireframe/Solid")
         wire_btn.clicked.connect(self.toggle_wireframe)
         controls.addWidget(wire_btn)
 
-        screenshot_btn = QPushButton("📷 Зберегти скрін")
+        screenshot_btn = QPushButton("\ud83d\udcf7 Зберегти скрін")
         screenshot_btn.clicked.connect(self.save_screenshot)
         controls.addWidget(screenshot_btn)
 
-        export_btn = QPushButton("📄 Експорт інфо")
-        export_btn.clicked.connect(self.export_info)
-        controls.addWidget(export_btn)
-
         if self.go_back_callback:
-            back_btn = QPushButton("⬅️ Назад")
+            back_btn = QPushButton("\u2b05\ufe0f Назад")
             back_btn.clicked.connect(lambda: self.go_back_callback("home"))
             controls.addWidget(back_btn)
 
@@ -234,7 +246,7 @@ class Viewer3DPage(QWidget):
         el_slider.setMaximum(90)
         el_slider.setValue(45)
         el_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'el'))
-        right_controls.addWidget(QLabel("🌅 Висота"))
+        right_controls.addWidget(QLabel("\ud83c\udf05 Висота"))
         right_controls.addWidget(el_slider)
         layout.addLayout(right_controls)
 
@@ -265,6 +277,3 @@ class Viewer3DPage(QWidget):
 
     def set_obj_file(self, file_path):
         self.gl_widget.load_model(file_path)
-
-
-

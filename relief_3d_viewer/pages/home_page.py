@@ -18,8 +18,5 @@ class HomePage(QWidget):
         btn2.clicked.connect(lambda: navigate_to("viewer"))
         layout.addWidget(btn2)
 
-        btn3 = QPushButton("ℹ️ Інформація про файл")
-        btn3.clicked.connect(lambda: navigate_to("info"))
-        layout.addWidget(btn3)
 
         self.setLayout(layout)
