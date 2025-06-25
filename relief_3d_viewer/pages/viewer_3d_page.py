@@ -10,15 +10,18 @@ from utils.model_loader import load_obj_with_texture
 class SimpleGLWidget(QOpenGLWidget):
     def __init__(self, info_label):
         super().__init__()
-        self.camera_pos = [0.0, 0.0, 5.0]
-        self.camera_rot = [0.0, 0.0]
+        self.target = [0.0, 0.0, 0.0]
+        self.distance = 5.0
+        self.azimuth = 0.0
+        self.elevation = 20.0
         self.model = ([], [])
         self.texture_id = None
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
         self.last_x = 0
         self.last_y = 0
-        self.mouse_pressed = False
+        self.middle_button_pressed = False
+        self.shift_pressed = False
         self.wireframe = False
         self.info_label = info_label
 
@@ -74,26 +77,30 @@ class SimpleGLWidget(QOpenGLWidget):
     def paintGL(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-        glTranslatef(-self.camera_pos[0], -self.camera_pos[1], -self.camera_pos[2])
-        glRotatef(self.camera_rot[0], 1.0, 0.0, 0.0)
-        glRotatef(self.camera_rot[1], 0.0, 1.0, 0.0)
+
+        eye = self.get_camera_position()
+        gluLookAt(*eye, *self.target, 0, 1, 0)
 
         self.update_light()
 
         vertices, faces = self.model
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
-        glBegin(GL_TRIANGLES)
         for face in faces:
-            if len(face) >= 3:
-                v0 = vertices[face[0]]
-                v1 = vertices[face[1]]
-                v2 = vertices[face[2]]
-                normal = self.compute_face_normal([v0, v1, v2])
-                glNormal3fv(normal)
-                glVertex3fv(v0)
-                glVertex3fv(v1)
-                glVertex3fv(v2)
-        glEnd()
+            glBegin(GL_TRIANGLES if len(face) == 3 else GL_QUADS if len(face) == 4 else GL_POLYGON)
+            face_vertices = [vertices[i] for i in face]
+            normal = self.compute_face_normal(face_vertices)
+            glNormal3fv(normal)
+            for v in face_vertices:
+                glVertex3fv(v)
+            glEnd()
+
+    def get_camera_position(self):
+        phi = math.radians(self.azimuth)
+        theta = math.radians(self.elevation)
+        x = self.distance * math.cos(theta) * math.sin(phi)
+        y = self.distance * math.sin(theta)
+        z = self.distance * math.cos(theta) * math.cos(phi)
+        return [self.target[0] + x, self.target[1] + y, self.target[2] + z]
 
     def compute_face_normal(self, verts):
         if len(verts) < 3:
@@ -109,42 +116,48 @@ class SimpleGLWidget(QOpenGLWidget):
         return [n / length for n in normal] if length else [0, 0, 1]
 
     def mousePressEvent(self, event):
-        self.mouse_pressed = True
+        if event.button() == Qt.MiddleButton:
+            self.middle_button_pressed = True
         self.last_x = event.x()
         self.last_y = event.y()
 
     def mouseReleaseEvent(self, event):
-        self.mouse_pressed = False
+        if event.button() == Qt.MiddleButton:
+            self.middle_button_pressed = False
 
     def mouseMoveEvent(self, event):
-        if self.mouse_pressed:
-            dx = event.x() - self.last_x
-            dy = event.y() - self.last_y
-            self.camera_rot[0] += dy * 0.5
-            self.camera_rot[1] += dx * 0.5
+        dx = event.x() - self.last_x
+        dy = event.y() - self.last_y
+        if self.middle_button_pressed:
+            if self.shift_pressed:
+                self.pan_camera(dx, dy)
+            else:
+                self.azimuth += dx * 0.5
+                self.elevation += dy * 0.5
+                self.elevation = max(-89, min(89, self.elevation))
             self.update()
         self.last_x = event.x()
         self.last_y = event.y()
 
+    def pan_camera(self, dx, dy):
+        right = [math.cos(math.radians(self.azimuth)), 0, -math.sin(math.radians(self.azimuth))]
+        up = [0, 1, 0]
+        scale = 0.01 * self.distance
+        self.target[0] -= right[0] * dx * scale
+        self.target[1] += dy * scale
+        self.target[2] -= right[2] * dx * scale
+
     def wheelEvent(self, event):
-        self.camera_pos[2] -= event.angleDelta().y() / 240
+        self.distance *= 0.9 if event.angleDelta().y() > 0 else 1.1
         self.update()
 
     def keyPressEvent(self, event):
-        key = event.key()
-        if key == Qt.Key_W:
-            self.camera_pos[2] -= 0.2
-        elif key == Qt.Key_S:
-            self.camera_pos[2] += 0.2
-        elif key == Qt.Key_A:
-            self.camera_pos[0] -= 0.2
-        elif key == Qt.Key_D:
-            self.camera_pos[0] += 0.2
-        elif key == Qt.Key_Q:
-            self.camera_pos[1] -= 0.2
-        elif key == Qt.Key_E:
-            self.camera_pos[1] += 0.2
-        self.update()
+        if event.key() == Qt.Key_Shift:
+            self.shift_pressed = True
+
+    def keyReleaseEvent(self, event):
+        if event.key() == Qt.Key_Shift:
+            self.shift_pressed = False
 
     def update_light(self):
         az = math.radians(self.light_azimuth)
@@ -155,6 +168,20 @@ class SimpleGLWidget(QOpenGLWidget):
         glLightfv(GL_LIGHT0, GL_POSITION, [x * 10, y * 10, z * 10, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 class Viewer3DPage(QWidget):
     def __init__(self, go_back_callback):
@@ -238,3 +265,6 @@ class Viewer3DPage(QWidget):
 
     def set_obj_file(self, file_path):
         self.gl_widget.load_model(file_path)
+
+
+
