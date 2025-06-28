@@ -1,3 +1,4 @@
+# === utils/model_loader.py ===
 import os
 
 def load_obj_with_texture(file_path):
