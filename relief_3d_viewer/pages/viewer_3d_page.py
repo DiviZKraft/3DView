@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFileDialog, QSlider, QToolBar, QAction, QSizePolicy
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QPalette, QColor
-from PyQt5.QtCore import QSize
-
-
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFileDialog,
+    QSlider, QToolBar, QAction, QSizePolicy
+)
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPalette, QColor
 from widgets.simple_gl_widget import SimpleGLWidget
 
 
@@ -12,39 +12,13 @@ class Viewer3DPage(QWidget):
         super().__init__()
 
         self.set_dark_theme()
-        layout = QHBoxLayout(self)
-
-        # Панель ліворуч (азимут)
-        left_controls = QVBoxLayout()
-        left_controls.addWidget(QLabel("☀️ Азимут"))
-        self.az_slider = QSlider(Qt.Vertical)
-        self.az_slider.setRange(0, 360)
-        self.az_slider.setValue(45)
-        self.az_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'az'))
-        left_controls.addWidget(self.az_slider)
-        layout.addLayout(left_controls)
-
-        # Центральна область
-        center_layout = QVBoxLayout()
         self.go_back_callback = go_back_callback
 
-        # Панель інформації
-        self.info_label = QLabel("ℹ️ Інформація про модель")
-        self.info_label.setStyleSheet("font-size: 16px; padding: 4px;")
-        center_layout.addWidget(self.info_label)
+        main_layout = QVBoxLayout(self)
 
-        # OpenGL-віджет
-        self.gl_widget = SimpleGLWidget(self.info_label)
-        self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        center_layout.addWidget(self.gl_widget)
-
-        # Toolbar
+        # === Верхній тулбар (навігація) ===
         toolbar = QToolBar()
         toolbar.setIconSize(QSize(24, 24))
-
-        wire_btn = QAction("🔳 Wireframe/Solid", self)
-        wire_btn.triggered.connect(self.toggle_wireframe)
-        toolbar.addAction(wire_btn)
 
         screenshot_btn = QAction("📸 Зберегти скрін", self)
         screenshot_btn.triggered.connect(self.save_screenshot)
@@ -54,15 +28,58 @@ class Viewer3DPage(QWidget):
         export_btn.triggered.connect(self.export_info)
         toolbar.addAction(export_btn)
 
+        theme_btn = QAction("🌓 Тема", self)
+        theme_btn.triggered.connect(self.toggle_theme)
+        toolbar.addAction(theme_btn)
+
         if self.go_back_callback:
             back_btn = QAction("⬅️ Назад", self)
             back_btn.triggered.connect(lambda: self.go_back_callback("home"))
             toolbar.addAction(back_btn)
 
-        center_layout.addWidget(toolbar)
-        layout.addLayout(center_layout)
+        main_layout.addWidget(toolbar)
 
-        # Панель праворуч (висота)
+        # === Центр: 3D сцена і повзунки ===
+        content_layout = QHBoxLayout()
+
+        # Лівий слайдер (Азимут)
+        left_controls = QVBoxLayout()
+        left_controls.addWidget(QLabel("☀️ Азимут"))
+        self.az_slider = QSlider(Qt.Vertical)
+        self.az_slider.setRange(0, 360)
+        self.az_slider.setValue(45)
+        self.az_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'az'))
+        left_controls.addWidget(self.az_slider)
+        content_layout.addLayout(left_controls)
+
+        # Центр: сцена + info + нижні кнопки
+        center_layout = QVBoxLayout()
+        self.info_label = QLabel("ℹ️ Інформація про модель")
+        self.info_label.setStyleSheet("font-size: 16px; padding: 4px;")
+        center_layout.addWidget(self.info_label)
+
+        self.gl_widget = SimpleGLWidget(self.info_label)
+        self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        center_layout.addWidget(self.gl_widget)
+
+        # Нижні кнопки (режими перегляду)
+        bottom_controls = QHBoxLayout()
+        normal_btn = QPushButton("🧭 Нормалі")
+        normal_btn.clicked.connect(self.gl_widget.toggle_normals)
+        bottom_controls.addWidget(normal_btn)
+
+        texture_btn = QPushButton("🖼️ Текстура")
+        texture_btn.clicked.connect(self.gl_widget.toggle_textures)
+        bottom_controls.addWidget(texture_btn)
+
+        wire_btn = QPushButton("🔳 Wireframe/Solid")
+        wire_btn.clicked.connect(self.toggle_wireframe)
+        bottom_controls.addWidget(wire_btn)
+
+        center_layout.addLayout(bottom_controls)
+        content_layout.addLayout(center_layout)
+
+        # Правий слайдер (Висота)
         right_controls = QVBoxLayout()
         right_controls.addWidget(QLabel("🌄 Висота"))
         self.el_slider = QSlider(Qt.Vertical)
@@ -70,11 +87,9 @@ class Viewer3DPage(QWidget):
         self.el_slider.setValue(45)
         self.el_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'el'))
         right_controls.addWidget(self.el_slider)
-        layout.addLayout(right_controls)
+        content_layout.addLayout(right_controls)
 
-        theme_btn = QAction("🌓 Змінити тему", self)
-        theme_btn.triggered.connect(self.gl_widget.toggle_theme)
-        toolbar.addAction(theme_btn)
+        main_layout.addLayout(content_layout)
 
     def toggle_wireframe(self):
         self.gl_widget.wireframe = not self.gl_widget.wireframe
@@ -102,6 +117,9 @@ class Viewer3DPage(QWidget):
     def set_obj_file(self, file_path):
         self.gl_widget.load_model(file_path)
 
+    def toggle_theme(self):
+        self.gl_widget.toggle_theme()
+
     def set_dark_theme(self):
         palette = QPalette()
         palette.setColor(QPalette.Window, QColor("#121212"))
@@ -113,4 +131,3 @@ class Viewer3DPage(QWidget):
         palette.setColor(QPalette.ButtonText, Qt.white)
         self.setPalette(palette)
         self.setAutoFillBackground(True)
-

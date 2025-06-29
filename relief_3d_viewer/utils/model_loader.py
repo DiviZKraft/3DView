@@ -1,5 +1,5 @@
-# === utils/model_loader.py ===
 import os
+import trimesh
 
 def load_obj_with_texture(file_path):
     vertices = []
@@ -32,3 +32,9 @@ def load_obj_with_texture(file_path):
 
     texture_path = os.path.join(base_dir, texture_file) if texture_file else None
     return (vertices, faces), texture_path
+
+def load_fbx(file_path):
+    mesh = trimesh.load(file_path, force='mesh')
+    vertices = mesh.vertices.tolist()
+    faces = mesh.faces.tolist()
+    return (vertices, faces)
