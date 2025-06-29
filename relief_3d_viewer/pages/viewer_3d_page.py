@@ -3,7 +3,9 @@ from PyQt5.QtCore import Qt, QSize
 from widgets.simple_gl_widget import SimpleGLWidget
 from ui.theme_manager import ThemeManager
 from ui.constants import BUTTON_STYLE, LABEL_STYLE
+from ui.theme_manager import ThemeManager
 
+from PyQt5.QtWidgets import QColorDialog, QAction
 class Viewer3DPage(QWidget):
     def __init__(self, go_back_callback):
         super().__init__()
@@ -22,9 +24,9 @@ class Viewer3DPage(QWidget):
         export_btn.triggered.connect(self.export_info)
         toolbar.addAction(export_btn)
 
-        theme_btn = QAction("🌓 Тема", self)
-        theme_btn.triggered.connect(self.theme_manager.toggle_theme)
-        toolbar.addAction(theme_btn)
+        color_action = QAction("🎨 Колір фону", self)
+        color_action.triggered.connect(self.change_bg_color)
+        toolbar.addAction(color_action)
 
         if self.go_back_callback:
             back_btn = QAction("⬅️ Назад", self)
@@ -129,3 +131,9 @@ class Viewer3DPage(QWidget):
 
     def set_obj_file(self, file_path):
         self.gl_widget.load_model(file_path)
+
+    def change_bg_color(self):
+        col = QColorDialog.getColor()
+        if col.isValid():
+            r, g, b, _ = col.getRgbF()
+            self.gl_widget.set_background_color(r, g, b, 1.0)

@@ -15,7 +15,8 @@ class SimpleGLWidget(QOpenGLWidget):
         self.wireframe = False
         self.show_normals = False
         self.show_texture = True
-        self.dark_mode = True
+        # Колір фону окремо, незалежно від теми
+        self.background_color = (0.1, 0.1, 0.1, 1.0)
 
         self.target = [0.0, 0.0, 0.0]
         self.distance = 5.0
@@ -30,6 +31,11 @@ class SimpleGLWidget(QOpenGLWidget):
         self.info_label = info_label
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
+
+    def set_background_color(self, r, g, b, a=1.0):
+        """Змінити колір фону сцени OpenGL."""
+        self.background_color = (r, g, b, a)
+        self.update()
 
     def load_model(self, path):
         ext = os.path.splitext(path)[1].lower()
@@ -61,7 +67,7 @@ class SimpleGLWidget(QOpenGLWidget):
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
-        except Exception as e:
+        except Exception:
             self.texture_id = None
 
     def update_info(self):
@@ -116,10 +122,8 @@ class SimpleGLWidget(QOpenGLWidget):
             glEnd()
 
     def set_clear_color(self):
-        if self.dark_mode:
-            glClearColor(0.1, 0.1, 0.1, 1.0)
-        else:
-            glClearColor(1.0, 1.0, 1.0, 1.0)
+        r, g, b, a = self.background_color
+        glClearColor(r, g, b, a)
 
     def get_camera_position(self):
         phi = math.radians(self.azimuth)
@@ -150,11 +154,6 @@ class SimpleGLWidget(QOpenGLWidget):
         glLightfv(GL_LIGHT0, GL_POSITION, [x * 10, y * 10, z * 10, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-
-    def toggle_theme(self):
-        self.dark_mode = not self.dark_mode
-        self.set_clear_color()
-        self.update()
 
     def toggle_normals(self):
         self.show_normals = not self.show_normals

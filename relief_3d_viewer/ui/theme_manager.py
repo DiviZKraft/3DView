@@ -2,12 +2,28 @@ import os
 from PyQt5.QtWidgets import QApplication
 
 class ThemeManager:
-    def __init__(self):
-        self.dark_mode = True
+    _instance = None
+    _callbacks = []
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(ThemeManager, cls).__new__(cls)
+            cls._instance.dark_mode = True
+        return cls._instance
+
+    def register(self, callback):
+        if callback not in self._callbacks:
+            self._callbacks.append(callback)
+
+    def unregister(self, callback):
+        if callback in self._callbacks:
+            self._callbacks.remove(callback)
 
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
         self.apply_current_theme()
+        for cb in self._callbacks:
+            cb(self.dark_mode)   # Повідомляємо всіх віджетів про зміну теми
 
     def apply_current_theme(self):
         if self.dark_mode:
