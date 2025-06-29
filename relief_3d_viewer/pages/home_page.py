@@ -26,11 +26,6 @@ class HomePage(QWidget):
             open_last_btn.clicked.connect(lambda: self.main_window.open_3d_viewer(last_path))
             layout.addWidget(open_last_btn)
 
-        search_btn = QPushButton("Пошук файлів")
-        search_btn.setStyleSheet(BUTTON_STYLE)
-        search_btn.clicked.connect(lambda: self.main_window.switch_page("search"))
-        layout.addWidget(search_btn)
-
         theme_btn = QPushButton("🌓 Перемкнути тему")
         theme_btn.setStyleSheet(BUTTON_STYLE)
         theme_btn.clicked.connect(self.theme_manager.toggle_theme)
