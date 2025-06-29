@@ -10,9 +10,17 @@ QPushButton {
     padding: 10px;
     color: white;
 }
+QPushButton:checked {
+    background-color: #266bf9;
+}
 QPushButton:hover {
     background-color: #666;
 }
 QLabel {
     font-size: 18px;
+}
+QToolBar {
+    background: #252525;
+    spacing: 8px;
+    border-bottom: 1px solid #3c3c3c;
 }

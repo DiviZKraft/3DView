@@ -1,22 +1,17 @@
 import os
-import json
 
-CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".3dviewer_last_path.json")
-
-def save_last_opened_path(path):
+def save_last_path(path, filename="last_path.txt"):
     try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump({"last_path": path}, f)
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(path)
     except Exception as e:
-        print(f"Не вдалося зберегти останній шлях: {e}")
+        print("Не вдалося зберегти шлях:", e)
 
-def load_last_opened_path():
-    if not os.path.exists(CONFIG_PATH):
-        return None
+def load_last_path(filename="last_path.txt"):
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get("last_path")
+        if os.path.exists(filename):
+            with open(filename, "r", encoding="utf-8") as f:
+                return f.read().strip()
     except Exception as e:
-        print(f"Не вдалося завантажити останній шлях: {e}")
-        return None
+        print("Не вдалося завантажити шлях:", e)
+    return ""

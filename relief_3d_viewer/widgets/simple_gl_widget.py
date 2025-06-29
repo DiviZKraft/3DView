@@ -52,14 +52,17 @@ class SimpleGLWidget(QOpenGLWidget):
             QMessageBox.critical(self, "Помилка моделі", str(e))
 
     def load_texture(self, image_path):
-        image = Image.open(image_path).transpose(Image.FLIP_TOP_BOTTOM)
-        img_data = image.convert("RGB").tobytes()
-        width, height = image.size
-        self.texture_id = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, self.texture_id)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+        try:
+            image = Image.open(image_path).transpose(Image.FLIP_TOP_BOTTOM)
+            img_data = image.convert("RGB").tobytes()
+            width, height = image.size
+            self.texture_id = glGenTextures(1)
+            glBindTexture(GL_TEXTURE_2D, self.texture_id)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
+        except Exception as e:
+            self.texture_id = None
 
     def update_info(self):
         vertices, faces = self.model
@@ -93,28 +96,21 @@ class SimpleGLWidget(QOpenGLWidget):
         self.set_clear_color()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
-
         eye = self.get_camera_position()
         gluLookAt(*eye, *self.target, 0, 1, 0)
-
         self.update_light()
-
         vertices, faces = self.model
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
-
         for face in faces:
             if len(face) < 3: continue
             glBegin(GL_POLYGON)
             face_vertices = [vertices[i] for i in face]
             normal = self.compute_face_normal(face_vertices)
             glNormal3fv(normal)
-
-            # кольори для режиму нормалей
             if self.show_normals:
                 glColor3f(0.6, 0.6, 1.0) if normal[2] >= 0 else glColor3f(1.0, 0.4, 0.4)
             else:
                 glColor3f(0.8, 0.8, 0.8)
-
             for v in face_vertices:
                 glVertex3fv(v)
             glEnd()
@@ -155,9 +151,9 @@ class SimpleGLWidget(QOpenGLWidget):
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
 
-    # ==== UI Режими ====
     def toggle_theme(self):
         self.dark_mode = not self.dark_mode
+        self.set_clear_color()
         self.update()
 
     def toggle_normals(self):
@@ -168,7 +164,6 @@ class SimpleGLWidget(QOpenGLWidget):
         self.show_texture = not self.show_texture
         self.update()
 
-    # ==== Камера ====
     def mousePressEvent(self, event):
         if event.button() == Qt.MiddleButton:
             self.middle_button_pressed = True
