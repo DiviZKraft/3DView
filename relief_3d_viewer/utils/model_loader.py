@@ -2,24 +2,28 @@ import os
 
 def load_obj_with_texture(path):
     """
-    Завантажує OBJ-модель: вершини, грані та текстуру з .mtl (якщо є).
-    Повертає ((vertices, faces), texture_path або None).
+    Завантажує OBJ-модель: вершини, грані та текстуру з .mtl (якщо вона є).
+    Повертає кортеж ((vertices, faces), texture_path або None).
     """
     print(f"[DEBUG] OBJ loader. Спроба відкрити: {path}")
     vertices = []
     faces = []
     texture_file = None
 
+    # Відкриваємо .obj-файл
     with open(path, 'r') as file:
         for line in file:
             if line.startswith('v '):
+                # Зчитуємо координати вершини
                 parts = line.strip().split()
                 vertices.append(tuple(map(float, parts[1:4])))
             elif line.startswith('f '):
+                # Зчитуємо індекси вершин грані (faces)
                 parts = line.strip().split()
                 face = [int(p.split('/')[0]) - 1 for p in parts[1:]]
                 faces.append(face)
             elif line.startswith('mtllib'):
+                # Якщо вказаний матеріал, шукаємо текстуру
                 mtl_file = line.strip().split()[1]
                 mtl_path = os.path.join(os.path.dirname(path), mtl_file)
                 print(f"[DEBUG] OBJ: знайдено mtllib: {mtl_path}")
@@ -39,7 +43,8 @@ def load_obj_with_texture(path):
 
 def load_ply(path):
     """
-    Завантажує PLY-файл (вершини, грані) через trimesh.
+    Завантажує PLY-файл (вершини, грані) через бібліотеку trimesh.
+    Повертає список вершин та список граней.
     """
     print(f"[DEBUG] PLY loader. Спроба відкрити: {path}")
     try:

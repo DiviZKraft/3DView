@@ -7,6 +7,7 @@ from widgets.simple_gl_widget import SimpleGLWidget
 from ui.theme_manager import ThemeManager
 from ui.constants import LABEL_STYLE
 import os
+
 BASEDIR = os.path.dirname(os.path.abspath(__file__))
 STYLE_DARK_PATH = os.path.join(BASEDIR, "ui", "styles_dark.qss")
 STYLE_LIGHT_PATH = os.path.join(BASEDIR, "ui", "styles_light.qss")
@@ -15,15 +16,17 @@ class Viewer3DPage(QWidget):
     """
     Сторінка з 3D-рендером, керуванням камерою, експортом, зміною фону та теми.
     """
+
     def __init__(self, go_back_callback):
         super().__init__()
-        self.go_back_callback = go_back_callback
-        self.theme_mode = "dark"
+        self.go_back_callback = go_back_callback    # Колбек для повернення на попередню сторінку
+        self.theme_mode = "dark"                   # Поточний режим теми
 
-        self.shadow_enabled = False
-        self.auto_rotate_enabled = False
-        self.current_view_mode = 0  # 0 - перспектива, 1 - top, 2 - bottom, 3 - side
+        self.shadow_enabled = False                # (зарезервовано під тіні)
+        self.auto_rotate_enabled = False           # Автоматичне обертання моделі
+        self.current_view_mode = 0                 # Режим камери (0 - перспектива, 1 - top...)
 
+        # Таймер для автоповороту моделі
         self.rotate_timer = QTimer(self)
         self.rotate_timer.timeout.connect(self.rotate_model)
 
@@ -31,6 +34,7 @@ class Viewer3DPage(QWidget):
         toolbar = QToolBar()
         toolbar.setIconSize(QSize(24, 24))
 
+        # --- Кнопки тулбара ---
         screenshot_btn = QAction("📸 Зберегти скрін", self)
         screenshot_btn.triggered.connect(self.save_screenshot)
         toolbar.addAction(screenshot_btn)
@@ -43,6 +47,7 @@ class Viewer3DPage(QWidget):
         color_action.triggered.connect(self.change_bg_color)
         toolbar.addAction(color_action)
 
+        # Кнопка повернення назад (якщо є)
         if self.go_back_callback:
             back_btn = QAction("⬅️ Назад", self)
             back_btn.triggered.connect(lambda: self.go_back_callback("home"))
@@ -51,7 +56,7 @@ class Viewer3DPage(QWidget):
         main_layout.addWidget(toolbar)
         content_layout = QHBoxLayout()
 
-        # --- Right Controls (Elevation) ---
+        # --- Праві контролери (Elevation - підйом джерела світла) ---
         right_controls = QVBoxLayout()
         el_label = QLabel("🌄 Висота")
         el_label.setStyleSheet(LABEL_STYLE)
@@ -63,7 +68,7 @@ class Viewer3DPage(QWidget):
         right_controls.addWidget(self.el_slider)
         content_layout.addLayout(right_controls)
 
-        # --- Center (3D) ---
+        # --- Центр (OpenGL віджет + кнопки керування) ---
         center_layout = QVBoxLayout()
         self.info_label = QLabel("ℹ️ Інформація про модель")
         self.info_label.setStyleSheet(LABEL_STYLE)
@@ -73,7 +78,7 @@ class Viewer3DPage(QWidget):
         self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         center_layout.addWidget(self.gl_widget)
 
-        # --- Bottom Controls (New Buttons) ---
+        # --- Нижні кнопки (керування переглядом) ---
         bottom_controls = QHBoxLayout()
         bottom_controls.setSpacing(12)
 
@@ -106,7 +111,7 @@ class Viewer3DPage(QWidget):
         center_layout.addLayout(bottom_controls)
         content_layout.addLayout(center_layout)
 
-        # --- Left Controls (Azimuth) ---
+        # --- Ліві контролери (Azimuth - азимут світла) ---
         left_controls = QVBoxLayout()
         az_label = QLabel("☀️ Азимут")
         az_label.setStyleSheet(LABEL_STYLE)
@@ -120,13 +125,15 @@ class Viewer3DPage(QWidget):
 
         main_layout.addLayout(content_layout)
         self.setLayout(main_layout)
-
-        # --- Встановлюємо стиль теми за замовчуванням ---
-  #      self.set_dark_theme()
+        # --- Тема встановлюється менеджером при старті ---
 
 
-    # --- ФУНКЦІЇ КНОПОК І ЛОГІКА ---
+    # --- Логіка та обробники кнопок ---
+
     def cycle_view_mode(self):
+        """
+        Перемикає режими камери (перспектива, зверху, знизу, збоку).
+        """
         self.current_view_mode = (self.current_view_mode + 1) % 4
         if self.current_view_mode == 0:
             self.view_btn.setText("👁️ Перспектива")
@@ -140,6 +147,9 @@ class Viewer3DPage(QWidget):
             self.gl_widget.set_view_mode(self.current_view_mode)
 
     def toggle_auto_rotate(self):
+        """
+        Вмикає/вимикає автоматичне обертання моделі.
+        """
         self.auto_rotate_enabled = not self.auto_rotate_enabled
         self.btn_rotate.setChecked(self.auto_rotate_enabled)
         if self.auto_rotate_enabled:
@@ -148,22 +158,34 @@ class Viewer3DPage(QWidget):
             self.rotate_timer.stop()
 
     def rotate_model(self):
+        """
+        Кожен таймер-тік — обертає модель (для автовертіння).
+        """
         if hasattr(self, 'gl_widget'):
             self.gl_widget.rotate_y(2)
             self.gl_widget.update()
 
     def toggle_wireframe(self):
+        """
+        Перемикає рендер між solid/wireframe.
+        """
         self.gl_widget.wireframe = not self.gl_widget.wireframe
         self.wire_btn.setChecked(self.gl_widget.wireframe)
         self.gl_widget.update()
 
     def save_screenshot(self):
+        """
+        Зберігає знімок вікна з моделлю у PNG.
+        """
         img = self.gl_widget.grabFramebuffer()
         file, _ = QFileDialog.getSaveFileName(self, "Зберегти скріншот", "model.png", "PNG (*.png)")
         if file:
             img.save(file)
 
     def set_light_angle(self, value, mode):
+        """
+        Встановлює кут освітлення (азимут або підйом).
+        """
         if mode == 'az':
             self.gl_widget.light_azimuth = value
         elif mode == 'el':
@@ -171,15 +193,24 @@ class Viewer3DPage(QWidget):
         self.gl_widget.update()
 
     def set_obj_file(self, file_path):
+        """
+        Завантажує модель для перегляду у OpenGL-віджет.
+        """
         self.gl_widget.load_model(file_path)
 
     def change_bg_color(self):
+        """
+        Відкриває діалог вибору кольору для фону 3D сцени.
+        """
         col = QColorDialog.getColor()
         if col.isValid():
             r, g, b, _ = col.getRgbF()
             self.gl_widget.set_background_color(r, g, b, 1.0)
 
     def export_model_dialog(self):
+        """
+        Діалог експорту моделі у .obj або .ply (викликає відповідний метод).
+        """
         vertices, faces = self.gl_widget.model
         if not vertices or not faces:
             QMessageBox.warning(self, "Експорт", "Модель не завантажена!")
@@ -204,6 +235,9 @@ class Viewer3DPage(QWidget):
             QMessageBox.critical(self, "Експорт", f"Помилка експорту: {e}")
 
     def export_obj(self, vertices, faces, file_path):
+        """
+        Експортує модель у формат OBJ.
+        """
         with open(file_path, "w", encoding="utf-8") as f:
             for v in vertices:
                 f.write(f"v {v[0]} {v[1]} {v[2]}\n")
@@ -212,6 +246,9 @@ class Viewer3DPage(QWidget):
                 f.write(f"f {' '.join(indices)}\n")
 
     def export_ply(self, vertices, faces, file_path):
+        """
+        Експортує модель у формат PLY.
+        """
         with open(file_path, "w", encoding="utf-8") as f:
             f.write("ply\nformat ascii 1.0\n")
             f.write(f"element vertex {len(vertices)}\n")
@@ -224,6 +261,9 @@ class Viewer3DPage(QWidget):
                 f.write(f"{len(face)} {' '.join(str(idx) for idx in face)}\n")
 
     def toggle_smooth_shading(self):
+        """
+        Перемикає між гладким та плоским шейдингом.
+        """
         self.gl_widget.toggle_smooth_shading()
         if self.gl_widget.smooth_shading:
             self.smooth_btn.setText("🟢 Гладке освітлення")

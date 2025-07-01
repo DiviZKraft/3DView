@@ -2,7 +2,7 @@ import os
 
 def save_last_path(path, filename="last_path.txt"):
     """
-    Зберігає шлях до останнього відкритого файлу.
+    Зберігає шлях до останнього відкритого файлу у текстовий файл.
     """
     try:
         with open(filename, "w", encoding="utf-8") as f:
@@ -12,7 +12,7 @@ def save_last_path(path, filename="last_path.txt"):
 
 def load_last_path(filename="last_path.txt"):
     """
-    Завантажує шлях до останнього відкритого файлу.
+    Завантажує шлях до останнього відкритого файлу з текстового файлу.
     """
     try:
         if os.path.exists(filename):
