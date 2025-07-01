@@ -18,11 +18,10 @@ class SimpleGLWidget(QOpenGLWidget):
         self.wireframe = False
         self.show_normals = False
         self.show_texture = True
-        self.background_color = (0.1, 0.1, 0.1, 1.0)  # колір фону
-
+        self.background_color = (0.1, 0.1, 0.1, 1.0)
         self.target = [0.0, 0.0, 0.0]
         self.distance = 5.0
-        self.azimuth = 0.0
+        self.azimuth = 45.0
         self.elevation = 20.0
         self.light_azimuth = 45
         self.light_elevation = 45
@@ -32,33 +31,27 @@ class SimpleGLWidget(QOpenGLWidget):
         self.last_y = 0
         self.info_label = info_label
 
+        self.model_rotation_y = 0.0      # Для автовертіння!
+        self.shadow_enabled = False      # Для відображення тіні
+
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
 
     def set_background_color(self, r, g, b, a=1.0):
-        """
-        Змінити колір фону сцени OpenGL.
-        """
         self.background_color = (r, g, b, a)
         self.update()
 
     def load_model(self, path):
-        """
-        Завантажує модель з файлу (OBJ/PLY) і ініціалізує стан камери.
-        """
-        print(f"[DEBUG] SimpleGLWidget.load_model: {path}")
         ext = os.path.splitext(path)[1].lower()
         try:
             if ext == ".obj":
                 self.model, texture_path = load_obj_with_texture(path)
-                print(f"[DEBUG] SimpleGLWidget: OBJ - Вершин: {len(self.model[0])}, Граней: {len(self.model[1])}, Текстура: {texture_path}")
                 if texture_path and os.path.exists(texture_path):
                     self.load_texture(texture_path)
                 else:
                     self.texture_id = None
             elif ext == ".ply":
                 self.model = load_ply(path)
-                print(f"[DEBUG] SimpleGLWidget: PLY - Вершин: {len(self.model[0])}, Граней: {len(self.model[1])}")
                 self.texture_id = None
             else:
                 raise ValueError("Непідтримуваний формат файлу.")
@@ -66,13 +59,9 @@ class SimpleGLWidget(QOpenGLWidget):
             self.update_info()
             self.update()
         except Exception as e:
-            print(f"[DEBUG] SimpleGLWidget: Помилка завантаження: {e}")
             QMessageBox.critical(self, "Помилка моделі", str(e))
 
     def load_texture(self, image_path):
-        """
-        Завантажує текстуру для OBJ-моделі (map_Kd з MTL).
-        """
         try:
             image = Image.open(image_path).transpose(Image.FLIP_TOP_BOTTOM)
             img_data = image.convert("RGB").tobytes()
@@ -86,16 +75,10 @@ class SimpleGLWidget(QOpenGLWidget):
             self.texture_id = None
 
     def update_info(self):
-        """
-        Оновлює інфо-панель (кількість вершин/граней).
-        """
         vertices, faces = self.model
         self.info_label.setText(f"Вершин: {len(vertices)} | Граней: {len(faces)}")
 
     def reset_view_to_model(self):
-        """
-        Центрує та масштабує камеру відносно завантаженої моделі.
-        """
         vertices, _ = self.model
         if not vertices:
             return
@@ -105,9 +88,6 @@ class SimpleGLWidget(QOpenGLWidget):
         self.distance = size * 1.5 if size > 0 else 5.0
 
     def initializeGL(self):
-        """
-        Ініціалізація OpenGL (освітлення, глибина, нормалі).
-        """
         self.set_clear_color()
         glEnable(GL_DEPTH_TEST)
         glEnable(GL_LIGHTING)
@@ -116,9 +96,6 @@ class SimpleGLWidget(QOpenGLWidget):
         glShadeModel(GL_SMOOTH)
 
     def resizeGL(self, w, h):
-        """
-        Зміна розміру viewport-а, налаштування перспективи.
-        """
         glViewport(0, 0, w, h)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -126,42 +103,51 @@ class SimpleGLWidget(QOpenGLWidget):
         glMatrixMode(GL_MODELVIEW)
 
     def paintGL(self):
-        """
-        Основний цикл рендерингу: малює модель у viewport.
-        """
         self.set_clear_color()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         eye = self.get_camera_position()
         gluLookAt(*eye, *self.target, 0, 1, 0)
         self.update_light()
+        glRotatef(self.model_rotation_y, 0, 1, 0)  # обертання моделі по Y
+
         vertices, faces = self.model
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+
+        # Проста тінь під моделлю (емулюємо через чорний диск)
+        if self.shadow_enabled:
+            glPushMatrix()
+            glTranslatef(self.target[0], min([v[1] for v in vertices]) - 0.05, self.target[2])
+            glColor4f(0.0, 0.0, 0.0, 0.3)
+            self.draw_shadow_circle()
+            glPopMatrix()
+
         for face in faces:
             if len(face) < 3: continue
             glBegin(GL_POLYGON)
             face_vertices = [vertices[i] for i in face]
             normal = self.compute_face_normal(face_vertices)
             glNormal3fv(normal)
-            if self.show_normals:
-                glColor3f(0.6, 0.6, 1.0) if normal[2] >= 0 else glColor3f(1.0, 0.4, 0.4)
-            else:
-                glColor3f(0.8, 0.8, 0.8)
+            glColor3f(0.8, 0.8, 0.8)
             for v in face_vertices:
                 glVertex3fv(v)
             glEnd()
 
+    def draw_shadow_circle(self, radius=1.0, segments=64):
+        glBegin(GL_TRIANGLE_FAN)
+        glVertex3f(0.0, 0.0, 0.0)
+        for i in range(segments + 1):
+            angle = 2 * math.pi * i / segments
+            x = radius * math.cos(angle)
+            z = radius * math.sin(angle)
+            glVertex3f(x, 0.0, z)
+        glEnd()
+
     def set_clear_color(self):
-        """
-        Встановлює колір очищення фону (background).
-        """
         r, g, b, a = self.background_color
         glClearColor(r, g, b, a)
 
     def get_camera_position(self):
-        """
-        Повертає координати камери на основі азимуту, елевейшну та відстані.
-        """
         phi = math.radians(self.azimuth)
         theta = math.radians(self.elevation)
         x = self.distance * math.cos(theta) * math.sin(phi)
@@ -170,9 +156,6 @@ class SimpleGLWidget(QOpenGLWidget):
         return [self.target[0] + x, self.target[1] + y, self.target[2] + z]
 
     def compute_face_normal(self, verts):
-        """
-        Обчислює нормаль для трикутника/полігона.
-        """
         if len(verts) < 3: return [0, 0, 1]
         v1 = [verts[1][i] - verts[0][i] for i in range(3)]
         v2 = [verts[2][i] - verts[0][i] for i in range(3)]
@@ -185,9 +168,6 @@ class SimpleGLWidget(QOpenGLWidget):
         return [n / length for n in normal] if length else [0, 0, 1]
 
     def update_light(self):
-        """
-        Оновлює положення і колір джерела світла.
-        """
         az = math.radians(self.light_azimuth)
         el = math.radians(self.light_elevation)
         x = math.cos(el) * math.cos(az)
@@ -196,20 +176,6 @@ class SimpleGLWidget(QOpenGLWidget):
         glLightfv(GL_LIGHT0, GL_POSITION, [x * 10, y * 10, z * 10, 1.0])
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-
-    def toggle_normals(self):
-        """
-        Перемикає відображення нормалей.
-        """
-        self.show_normals = not self.show_normals
-        self.update()
-
-    def toggle_textures(self):
-        """
-        Перемикає відображення текстур (поки не реалізовано).
-        """
-        self.show_texture = not self.show_texture
-        self.update()
 
     # --- Управління камерою мишею ---
     def mousePressEvent(self, event):
@@ -237,9 +203,6 @@ class SimpleGLWidget(QOpenGLWidget):
         self.last_y = event.y()
 
     def pan_camera(self, dx, dy):
-        """
-        Панорамування (зміщення) камери по горизонталі/вертикалі.
-        """
         right = [math.cos(math.radians(self.azimuth)), 0, -math.sin(math.radians(self.azimuth))]
         scale = 0.01 * self.distance
         self.target[0] -= right[0] * dx * scale
@@ -247,9 +210,6 @@ class SimpleGLWidget(QOpenGLWidget):
         self.target[2] -= right[2] * dx * scale
 
     def wheelEvent(self, event):
-        """
-        Зум (наближення/віддалення камери).
-        """
         self.distance *= 0.9 if event.angleDelta().y() > 0 else 1.1
         self.update()
 
@@ -260,3 +220,45 @@ class SimpleGLWidget(QOpenGLWidget):
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Shift:
             self.shift_pressed = False
+
+    # --- Нові методи для твоїх кнопок ---
+    def set_shadow(self, enabled):
+        self.shadow_enabled = enabled
+
+    def rotate_y(self, angle):
+        self.model_rotation_y = (self.model_rotation_y + angle) % 360
+        self.update()
+
+    def set_view_mode(self, mode):
+        """
+        mode: 0 - перспектива, 1 - зверху, 2 - знизу, 3 - збоку
+        """
+        if mode == 0:
+            self.set_perspective_camera()
+        elif mode == 1:
+            self.set_top_view()
+        elif mode == 2:
+            self.set_bottom_view()
+        elif mode == 3:
+            self.set_side_view()
+        self.update()
+
+    def set_perspective_camera(self):
+        self.azimuth = 45
+        self.elevation = 20
+        self.distance = 5.0
+
+    def set_top_view(self):
+        self.azimuth = 0
+        self.elevation = 90
+        self.distance = 5.0
+
+    def set_bottom_view(self):
+        self.azimuth = 0
+        self.elevation = -90
+        self.distance = 5.0
+
+    def set_side_view(self):
+        self.azimuth = 90
+        self.elevation = 0
+        self.distance = 5.0

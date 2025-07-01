@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFileDialog,
     QSlider, QToolBar, QAction, QSizePolicy, QMessageBox, QColorDialog
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from widgets.simple_gl_widget import SimpleGLWidget
 from ui.theme_manager import ThemeManager
 from ui.constants import BUTTON_STYLE, LABEL_STYLE
@@ -16,6 +16,13 @@ class Viewer3DPage(QWidget):
         super().__init__()
         self.go_back_callback = go_back_callback
         self.theme_manager = ThemeManager()
+
+        self.shadow_enabled = False
+        self.auto_rotate_enabled = False
+        self.current_view_mode = 0  # 0 - перспектива, 1 - top, 2 - bottom, 3 - side
+
+        self.rotate_timer = QTimer(self)
+        self.rotate_timer.timeout.connect(self.rotate_model)
 
         main_layout = QVBoxLayout(self)
         toolbar = QToolBar()
@@ -41,51 +48,6 @@ class Viewer3DPage(QWidget):
         main_layout.addWidget(toolbar)
         content_layout = QHBoxLayout()
 
-        # --- Left Controls (Azimuth) ---
-        left_controls = QVBoxLayout()
-        az_label = QLabel("☀️ Азимут")
-        az_label.setStyleSheet(LABEL_STYLE)
-        left_controls.addWidget(az_label)
-        self.az_slider = QSlider(Qt.Vertical)
-        self.az_slider.setRange(0, 360)
-        self.az_slider.setValue(45)
-        self.az_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'az'))
-        left_controls.addWidget(self.az_slider)
-        content_layout.addLayout(left_controls)
-
-        # --- Center (3D) ---
-        center_layout = QVBoxLayout()
-        self.info_label = QLabel("ℹ️ Інформація про модель")
-        self.info_label.setStyleSheet(LABEL_STYLE)
-        center_layout.addWidget(self.info_label)
-
-        self.gl_widget = SimpleGLWidget(self.info_label)
-        self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        center_layout.addWidget(self.gl_widget)
-
-        # --- Bottom Controls (Buttons) ---
-        bottom_controls = QHBoxLayout()
-        self.normal_btn = QPushButton("🧭 Нормалі")
-        self.normal_btn.setStyleSheet(BUTTON_STYLE)
-        self.normal_btn.setCheckable(True)
-        self.normal_btn.clicked.connect(self.toggle_normals)
-        bottom_controls.addWidget(self.normal_btn)
-
-        self.texture_btn = QPushButton("🖼️ Текстура")
-        self.texture_btn.setStyleSheet(BUTTON_STYLE)
-        self.texture_btn.setCheckable(True)
-        self.texture_btn.clicked.connect(self.toggle_textures)
-        bottom_controls.addWidget(self.texture_btn)
-
-        self.wire_btn = QPushButton("🔳 Wireframe/Solid")
-        self.wire_btn.setStyleSheet(BUTTON_STYLE)
-        self.wire_btn.setCheckable(True)
-        self.wire_btn.clicked.connect(self.toggle_wireframe)
-        bottom_controls.addWidget(self.wire_btn)
-
-        center_layout.addLayout(bottom_controls)
-        content_layout.addLayout(center_layout)
-
         # --- Right Controls (Elevation) ---
         right_controls = QVBoxLayout()
         el_label = QLabel("🌄 Висота")
@@ -98,20 +60,92 @@ class Viewer3DPage(QWidget):
         right_controls.addWidget(self.el_slider)
         content_layout.addLayout(right_controls)
 
+        # --- Center (3D) ---
+        center_layout = QVBoxLayout()
+        self.info_label = QLabel("ℹ️ Інформація про модель")
+        self.info_label.setStyleSheet(LABEL_STYLE)
+        center_layout.addWidget(self.info_label)
+
+        self.gl_widget = SimpleGLWidget(self.info_label)
+        self.gl_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        center_layout.addWidget(self.gl_widget)
+
+        # --- Bottom Controls (New Buttons) ---
+        bottom_controls = QHBoxLayout()
+        bottom_controls.setSpacing(12)
+
+        self.view_btn = QPushButton("👁️ Перспектива")
+        self.view_btn.setObjectName("MainButton")
+        self.view_btn.setMinimumHeight(44)
+        self.view_btn.clicked.connect(self.cycle_view_mode)
+        bottom_controls.addWidget(self.view_btn)
+
+
+        self.wire_btn = QPushButton("🔳 Wireframe/Solid")
+        self.wire_btn.setStyleSheet(BUTTON_STYLE)
+        self.wire_btn.setCheckable(True)
+        self.wire_btn.clicked.connect(self.toggle_wireframe)
+        bottom_controls.addWidget(self.wire_btn)
+
+        self.btn_rotate = QPushButton("🔄 Автовертіння")
+        self.btn_rotate.setObjectName("MainButton")
+        self.btn_rotate.setMinimumHeight(44)
+        self.btn_rotate.setCheckable(True)
+        self.btn_rotate.clicked.connect(self.toggle_auto_rotate)
+        bottom_controls.addWidget(self.btn_rotate)
+
+        center_layout.addLayout(bottom_controls)
+        content_layout.addLayout(center_layout)
+
+
+
+        # --- Left Controls (Azimuth) ---
+        left_controls = QVBoxLayout()
+        az_label = QLabel("☀️ Азимут")
+        az_label.setStyleSheet(LABEL_STYLE)
+        left_controls.addWidget(az_label)
+        self.az_slider = QSlider(Qt.Vertical)
+        self.az_slider.setRange(0, 360)
+        self.az_slider.setValue(45)
+        self.az_slider.valueChanged.connect(lambda val: self.set_light_angle(val, 'az'))
+        left_controls.addWidget(self.az_slider)
+        content_layout.addLayout(left_controls)
+
         main_layout.addLayout(content_layout)
+
+    # --- ФУНКЦІЇ КНОПОК І ЛОГІКА ---
+    def cycle_view_mode(self):
+        self.current_view_mode = (self.current_view_mode + 1) % 4
+        if self.current_view_mode == 0:
+            self.view_btn.setText("👁️ Перспектива")
+        elif self.current_view_mode == 1:
+            self.view_btn.setText("⬆️ Зверху")
+        elif self.current_view_mode == 2:
+            self.view_btn.setText("⬇️ Знизу")
+        elif self.current_view_mode == 3:
+            self.view_btn.setText("➡️ Збоку")
+        if hasattr(self, 'gl_widget'):
+            self.gl_widget.set_view_mode(self.current_view_mode)
+
+
+
+    def toggle_auto_rotate(self):
+        self.auto_rotate_enabled = not self.auto_rotate_enabled
+        self.btn_rotate.setChecked(self.auto_rotate_enabled)
+        if self.auto_rotate_enabled:
+            self.rotate_timer.start(20)
+        else:
+            self.rotate_timer.stop()
+
+    def rotate_model(self):
+        if hasattr(self, 'gl_widget'):
+            self.gl_widget.rotate_y(2)
+            self.gl_widget.update()
 
     def toggle_wireframe(self):
         self.gl_widget.wireframe = not self.gl_widget.wireframe
         self.wire_btn.setChecked(self.gl_widget.wireframe)
         self.gl_widget.update()
-
-    def toggle_normals(self):
-        self.gl_widget.toggle_normals()
-        self.normal_btn.setChecked(self.gl_widget.show_normals)
-
-    def toggle_textures(self):
-        self.gl_widget.toggle_textures()
-        self.texture_btn.setChecked(self.gl_widget.show_texture)
 
     def save_screenshot(self):
         img = self.gl_widget.grabFramebuffer()
