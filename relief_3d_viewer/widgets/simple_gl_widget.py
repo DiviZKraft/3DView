@@ -13,6 +13,7 @@ class SimpleGLWidget(QOpenGLWidget):
         self.model = ([], [])
         self.texture_id = None
         self.wireframe = False
+        self.smooth_shading = True  # <--- ДОДАНО перемикач
         self.background_color = (0.93, 1, 0.93, 1.0)
         self.target = [0.0, 0.0, 0.0]
         self.distance = 5.0
@@ -27,12 +28,14 @@ class SimpleGLWidget(QOpenGLWidget):
         self.info_label = info_label
         self.model_rotation_y = 0.0
 
-        # Нові масиви
         self._vertex_array = None
         self._normal_array = None
+        self._flat_normal_array = None
         self._tri_index_array = None
         self._quad_index_array = None
-        self.view_mode = 0  # 0 = перспектива
+        self._flat_tri_index_array = None
+        self._flat_quad_index_array = None
+        self.view_mode = 0
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
@@ -45,7 +48,7 @@ class SimpleGLWidget(QOpenGLWidget):
         ext = os.path.splitext(path)[1].lower()
         try:
             if ext == ".obj":
-                self.model, texture_path = load_obj_with_texture(path)
+                self.model, _ = load_obj_with_texture(path)
             elif ext == ".ply":
                 self.model = load_ply(path)
             else:
@@ -62,13 +65,14 @@ class SimpleGLWidget(QOpenGLWidget):
         if not vertices or not faces:
             self._vertex_array = None
             self._normal_array = None
+            self._flat_normal_array = None
             self._tri_index_array = None
             self._quad_index_array = None
+            self._flat_tri_index_array = None
+            self._flat_quad_index_array = None
             return
 
         self._vertex_array = np.array(vertices, dtype=np.float32)
-
-        # Розбиваємо на трикутники та чотирикутники
         triangles = []
         quads = []
         for f in faces:
@@ -77,14 +81,12 @@ class SimpleGLWidget(QOpenGLWidget):
             elif len(f) == 4:
                 quads.append(f)
             elif len(f) > 4:
-                # Якщо полігон багатокутник, розбити на трикутники fan'ом
                 for i in range(1, len(f)-1):
                     triangles.append([f[0], f[i], f[i+1]])
         self._tri_index_array = np.array(triangles, dtype=np.uint32).flatten() if triangles else None
         self._quad_index_array = np.array(quads, dtype=np.uint32).flatten() if quads else None
 
-        # --- Генеруємо нормалі для вершин (гладко) ---
-        # Сума всіх нормалей полігонів, що містять цю вершину
+        # Гладкі нормалі (vertex normals)
         vertex_normals = [np.zeros(3, dtype=np.float32) for _ in vertices]
         for f in faces:
             verts = [np.array(vertices[i]) for i in f]
@@ -92,12 +94,37 @@ class SimpleGLWidget(QOpenGLWidget):
             v1 = verts[1] - verts[0]
             v2 = verts[2] - verts[0]
             n = np.cross(v1, v2)
-            n = n / (np.linalg.norm(n) if np.linalg.norm(n) != 0 else 1)
+            n = n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1)
             for idx in f:
                 vertex_normals[idx] += n
-        # Нормалізуємо вектори
-        vertex_normals = [n / (np.linalg.norm(n) if np.linalg.norm(n) != 0 else 1) for n in vertex_normals]
+        vertex_normals = [n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1) for n in vertex_normals]
         self._normal_array = np.array(vertex_normals, dtype=np.float32)
+
+        # Плоскі нормалі (flat normals)
+        flat_normals = []
+        flat_triangles = []
+        flat_quads = []
+        for f in faces:
+            verts = [np.array(vertices[i]) for i in f]
+            if len(verts) < 3: continue
+            v1 = verts[1] - verts[0]
+            v2 = verts[2] - verts[0]
+            n = np.cross(v1, v2)
+            n = n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1)
+            if len(f) == 3:
+                flat_triangles.extend(f)
+                flat_normals.extend([n, n, n])
+            elif len(f) == 4:
+                flat_quads.extend(f)
+                flat_normals.extend([n, n, n, n])
+            elif len(f) > 4:
+                for i in range(1, len(f)-1):
+                    idxs = [f[0], f[i], f[i+1]]
+                    flat_triangles.extend(idxs)
+                    flat_normals.extend([n, n, n])
+        self._flat_normal_array = np.array(flat_normals, dtype=np.float32)
+        self._flat_tri_index_array = np.array(flat_triangles, dtype=np.uint32) if flat_triangles else None
+        self._flat_quad_index_array = np.array(flat_quads, dtype=np.uint32) if flat_quads else None
 
     def update_info(self):
         vertices, faces = self.model
@@ -118,7 +145,7 @@ class SimpleGLWidget(QOpenGLWidget):
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         glEnable(GL_NORMALIZE)
-        glShadeModel(GL_SMOOTH)
+        glShadeModel(GL_SMOOTH if self.smooth_shading else GL_FLAT)
         self.setup_materials()
 
     def setup_materials(self):
@@ -145,26 +172,34 @@ class SimpleGLWidget(QOpenGLWidget):
         self.update_light()
         glRotatef(self.model_rotation_y, 0, 1, 0)
 
-        # --- Оптимізований рендер ---
-        if self._vertex_array is not None and self._normal_array is not None:
-            glEnableClientState(GL_VERTEX_ARRAY)
-            glEnableClientState(GL_NORMAL_ARRAY)
-            glVertexPointer(3, GL_FLOAT, 0, self._vertex_array)
-            glNormalPointer(GL_FLOAT, 0, self._normal_array)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+        glShadeModel(GL_SMOOTH if self.smooth_shading else GL_FLAT)
 
-            # Трикутники
-            if self._tri_index_array is not None:
-                glDrawElements(GL_TRIANGLES, len(self._tri_index_array), GL_UNSIGNED_INT, self._tri_index_array)
-            # Чотирикутники
-            if self._quad_index_array is not None:
-                glDrawElements(GL_QUADS, len(self._quad_index_array), GL_UNSIGNED_INT, self._quad_index_array)
+        if self._vertex_array is not None:
+            glEnableClientState(GL_VERTEX_ARRAY)
+            glVertexPointer(3, GL_FLOAT, 0, self._vertex_array)
+
+            if self.smooth_shading:
+                glEnableClientState(GL_NORMAL_ARRAY)
+                glNormalPointer(GL_FLOAT, 0, self._normal_array)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+                if self._tri_index_array is not None:
+                    glDrawElements(GL_TRIANGLES, len(self._tri_index_array), GL_UNSIGNED_INT, self._tri_index_array)
+                if self._quad_index_array is not None:
+                    glDrawElements(GL_QUADS, len(self._quad_index_array), GL_UNSIGNED_INT, self._quad_index_array)
+                glDisableClientState(GL_NORMAL_ARRAY)
+            else:
+                glEnableClientState(GL_NORMAL_ARRAY)
+                glNormalPointer(GL_FLOAT, 0, self._flat_normal_array)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+                if self._flat_tri_index_array is not None:
+                    glDrawElements(GL_TRIANGLES, len(self._flat_tri_index_array), GL_UNSIGNED_INT, self._flat_tri_index_array)
+                if self._flat_quad_index_array is not None:
+                    glDrawElements(GL_QUADS, len(self._flat_quad_index_array), GL_UNSIGNED_INT, self._flat_quad_index_array)
+                glDisableClientState(GL_NORMAL_ARRAY)
 
             glDisableClientState(GL_VERTEX_ARRAY)
-            glDisableClientState(GL_NORMAL_ARRAY)
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         else:
-            # Fallback (дуже повільний спосіб)
             vertices, faces = self.model
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
             for face in faces:
@@ -264,7 +299,7 @@ class SimpleGLWidget(QOpenGLWidget):
             self.shift_pressed = False
 
     def set_shadow(self, enabled):
-        pass  # тіні не реалізовані тут
+        pass
 
     def rotate_y(self, angle):
         self.model_rotation_y = (self.model_rotation_y + angle) % 360
@@ -301,3 +336,8 @@ class SimpleGLWidget(QOpenGLWidget):
         self.azimuth = 90
         self.elevation = 0
         self.distance = 5.0
+
+    # --- Перемикач шейдингу ---
+    def toggle_smooth_shading(self):
+        self.smooth_shading = not self.smooth_shading
+        self.update()

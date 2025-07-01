@@ -87,12 +87,20 @@ class Viewer3DPage(QWidget):
         self.wire_btn.clicked.connect(self.toggle_wireframe)
         bottom_controls.addWidget(self.wire_btn)
 
+        self.smooth_btn = QPushButton("🟢 Гладке освітлення")
+        self.smooth_btn.setCheckable(True)
+        self.smooth_btn.setChecked(True)
+        self.smooth_btn.clicked.connect(self.toggle_smooth_shading)
+        bottom_controls.addWidget(self.smooth_btn)
+
         self.btn_rotate = QPushButton("🔄 Автовертіння")
         self.btn_rotate.setObjectName("MainButton")
         self.btn_rotate.setMinimumHeight(44)
         self.btn_rotate.setCheckable(True)
         self.btn_rotate.clicked.connect(self.toggle_auto_rotate)
         bottom_controls.addWidget(self.btn_rotate)
+
+
 
         center_layout.addLayout(bottom_controls)
         content_layout.addLayout(center_layout)
@@ -212,3 +220,14 @@ class Viewer3DPage(QWidget):
                 f.write(f"{v[0]} {v[1]} {v[2]}\n")
             for face in faces:
                 f.write(f"{len(face)} {' '.join(str(idx) for idx in face)}\n")
+
+
+    def toggle_smooth_shading(self):
+        self.gl_widget.toggle_smooth_shading()
+        if self.gl_widget.smooth_shading:
+            self.smooth_btn.setText("🟢 Гладке освітлення")
+            self.smooth_btn.setChecked(True)
+        else:
+            self.smooth_btn.setText("🔲 Плоске освітлення")
+            self.smooth_btn.setChecked(False)
+
