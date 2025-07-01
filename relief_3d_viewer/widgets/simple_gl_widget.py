@@ -13,7 +13,7 @@ class SimpleGLWidget(QOpenGLWidget):
         self.model = ([], [])
         self.texture_id = None
         self.wireframe = False
-        self.smooth_shading = True  # <--- ДОДАНО перемикач
+        self.smooth_shading = True
         self.background_color = (0.93, 1, 0.93, 1.0)
         self.target = [0.0, 0.0, 0.0]
         self.distance = 5.0
@@ -28,13 +28,18 @@ class SimpleGLWidget(QOpenGLWidget):
         self.info_label = info_label
         self.model_rotation_y = 0.0
 
+        # Flat and smooth geometry arrays
         self._vertex_array = None
         self._normal_array = None
-        self._flat_normal_array = None
         self._tri_index_array = None
         self._quad_index_array = None
-        self._flat_tri_index_array = None
-        self._flat_quad_index_array = None
+
+        # FLAT SHADING arrays
+        self._flat_tri_vertex_array = None
+        self._flat_tri_normal_array = None
+        self._flat_quad_vertex_array = None
+        self._flat_quad_normal_array = None
+
         self.view_mode = 0
 
         self.setFocusPolicy(Qt.StrongFocus)
@@ -65,11 +70,12 @@ class SimpleGLWidget(QOpenGLWidget):
         if not vertices or not faces:
             self._vertex_array = None
             self._normal_array = None
-            self._flat_normal_array = None
             self._tri_index_array = None
             self._quad_index_array = None
-            self._flat_tri_index_array = None
-            self._flat_quad_index_array = None
+            self._flat_tri_vertex_array = None
+            self._flat_tri_normal_array = None
+            self._flat_quad_vertex_array = None
+            self._flat_quad_normal_array = None
             return
 
         self._vertex_array = np.array(vertices, dtype=np.float32)
@@ -81,6 +87,7 @@ class SimpleGLWidget(QOpenGLWidget):
             elif len(f) == 4:
                 quads.append(f)
             elif len(f) > 4:
+                # Багатокутники — триангуляція (залишаємо як трикутники)
                 for i in range(1, len(f)-1):
                     triangles.append([f[0], f[i], f[i+1]])
         self._tri_index_array = np.array(triangles, dtype=np.uint32).flatten() if triangles else None
@@ -100,31 +107,45 @@ class SimpleGLWidget(QOpenGLWidget):
         vertex_normals = [n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1) for n in vertex_normals]
         self._normal_array = np.array(vertex_normals, dtype=np.float32)
 
-        # Плоскі нормалі (flat normals)
-        flat_normals = []
-        flat_triangles = []
-        flat_quads = []
+        # FLAT: окремо для трикутників і чотирикутників
+        flat_tri_vertices = []
+        flat_tri_normals = []
+        flat_quad_vertices = []
+        flat_quad_normals = []
         for f in faces:
             verts = [np.array(vertices[i]) for i in f]
-            if len(verts) < 3: continue
-            v1 = verts[1] - verts[0]
-            v2 = verts[2] - verts[0]
-            n = np.cross(v1, v2)
-            n = n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1)
             if len(f) == 3:
-                flat_triangles.extend(f)
-                flat_normals.extend([n, n, n])
+                v1 = verts[1] - verts[0]
+                v2 = verts[2] - verts[0]
+                n = np.cross(v1, v2)
+                n = n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1)
+                for i in range(3):
+                    flat_tri_vertices.append(vertices[f[i]])
+                    flat_tri_normals.append(n)
             elif len(f) == 4:
-                flat_quads.extend(f)
-                flat_normals.extend([n, n, n, n])
+                v1 = verts[1] - verts[0]
+                v2 = verts[2] - verts[0]
+                n = np.cross(v1, v2)
+                n = n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1)
+                for i in range(4):
+                    flat_quad_vertices.append(vertices[f[i]])
+                    flat_quad_normals.append(n)
             elif len(f) > 4:
+                # багатокутники — трикутники (fan)
                 for i in range(1, len(f)-1):
-                    idxs = [f[0], f[i], f[i+1]]
-                    flat_triangles.extend(idxs)
-                    flat_normals.extend([n, n, n])
-        self._flat_normal_array = np.array(flat_normals, dtype=np.float32)
-        self._flat_tri_index_array = np.array(flat_triangles, dtype=np.uint32) if flat_triangles else None
-        self._flat_quad_index_array = np.array(flat_quads, dtype=np.uint32) if flat_quads else None
+                    tri = [f[0], f[i], f[i+1]]
+                    tri_verts = [np.array(vertices[idx]) for idx in tri]
+                    v1 = tri_verts[1] - tri_verts[0]
+                    v2 = tri_verts[2] - tri_verts[0]
+                    n = np.cross(v1, v2)
+                    n = n / (np.linalg.norm(n) if np.linalg.norm(n) > 0 else 1)
+                    for idx in tri:
+                        flat_tri_vertices.append(vertices[idx])
+                        flat_tri_normals.append(n)
+        self._flat_tri_vertex_array = np.array(flat_tri_vertices, dtype=np.float32) if flat_tri_vertices else None
+        self._flat_tri_normal_array = np.array(flat_tri_normals, dtype=np.float32) if flat_tri_normals else None
+        self._flat_quad_vertex_array = np.array(flat_quad_vertices, dtype=np.float32) if flat_quad_vertices else None
+        self._flat_quad_normal_array = np.array(flat_quad_normals, dtype=np.float32) if flat_quad_normals else None
 
     def update_info(self):
         vertices, faces = self.model
@@ -174,11 +195,11 @@ class SimpleGLWidget(QOpenGLWidget):
 
         glShadeModel(GL_SMOOTH if self.smooth_shading else GL_FLAT)
 
-        if self._vertex_array is not None:
-            glEnableClientState(GL_VERTEX_ARRAY)
-            glVertexPointer(3, GL_FLOAT, 0, self._vertex_array)
-
-            if self.smooth_shading:
+        if self.smooth_shading:
+            # Smoothing: стандартний рендер (vertex + normal + індекси)
+            if self._vertex_array is not None:
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, self._vertex_array)
                 glEnableClientState(GL_NORMAL_ARRAY)
                 glNormalPointer(GL_FLOAT, 0, self._normal_array)
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
@@ -187,31 +208,28 @@ class SimpleGLWidget(QOpenGLWidget):
                 if self._quad_index_array is not None:
                     glDrawElements(GL_QUADS, len(self._quad_index_array), GL_UNSIGNED_INT, self._quad_index_array)
                 glDisableClientState(GL_NORMAL_ARRAY)
-            else:
-                glEnableClientState(GL_NORMAL_ARRAY)
-                glNormalPointer(GL_FLOAT, 0, self._flat_normal_array)
-                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
-                if self._flat_tri_index_array is not None:
-                    glDrawElements(GL_TRIANGLES, len(self._flat_tri_index_array), GL_UNSIGNED_INT, self._flat_tri_index_array)
-                if self._flat_quad_index_array is not None:
-                    glDrawElements(GL_QUADS, len(self._flat_quad_index_array), GL_UNSIGNED_INT, self._flat_quad_index_array)
-                glDisableClientState(GL_NORMAL_ARRAY)
-
-            glDisableClientState(GL_VERTEX_ARRAY)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+                glDisableClientState(GL_VERTEX_ARRAY)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         else:
-            vertices, faces = self.model
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
-            for face in faces:
-                if len(face) < 3: continue
-                glBegin(GL_POLYGON)
-                face_vertices = [vertices[i] for i in face]
-                normal = self.compute_face_normal(face_vertices)
-                glNormal3fv(normal)
-                glColor3f(0.8, 0.8, 0.8)
-                for v in face_vertices:
-                    glVertex3fv(v)
-                glEnd()
+            # FLAT: рендеримо окремо трикутники і чотирикутники з дубльованими нормалями
+            if self._flat_tri_vertex_array is not None:
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glEnableClientState(GL_NORMAL_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, self._flat_tri_vertex_array)
+                glNormalPointer(GL_FLOAT, 0, self._flat_tri_normal_array)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+                glDrawArrays(GL_TRIANGLES, 0, len(self._flat_tri_vertex_array))
+                glDisableClientState(GL_NORMAL_ARRAY)
+                glDisableClientState(GL_VERTEX_ARRAY)
+            if self._flat_quad_vertex_array is not None:
+                glEnableClientState(GL_VERTEX_ARRAY)
+                glEnableClientState(GL_NORMAL_ARRAY)
+                glVertexPointer(3, GL_FLOAT, 0, self._flat_quad_vertex_array)
+                glNormalPointer(GL_FLOAT, 0, self._flat_quad_normal_array)
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+                glDrawArrays(GL_QUADS, 0, len(self._flat_quad_vertex_array))
+                glDisableClientState(GL_NORMAL_ARRAY)
+                glDisableClientState(GL_VERTEX_ARRAY)
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
     def set_clear_color(self):

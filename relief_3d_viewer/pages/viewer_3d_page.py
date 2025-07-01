@@ -5,17 +5,20 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QTimer
 from widgets.simple_gl_widget import SimpleGLWidget
 from ui.theme_manager import ThemeManager
-from ui.constants import BUTTON_STYLE, LABEL_STYLE
+from ui.constants import LABEL_STYLE
 import os
+BASEDIR = os.path.dirname(os.path.abspath(__file__))
+STYLE_DARK_PATH = os.path.join(BASEDIR, "ui", "styles_dark.qss")
+STYLE_LIGHT_PATH = os.path.join(BASEDIR, "ui", "styles_light.qss")
 
 class Viewer3DPage(QWidget):
     """
-    Сторінка з 3D-рендером, керуванням камерою, експортом, зміною фону.
+    Сторінка з 3D-рендером, керуванням камерою, експортом, зміною фону та теми.
     """
     def __init__(self, go_back_callback):
         super().__init__()
         self.go_back_callback = go_back_callback
-        self.theme_manager = ThemeManager()
+        self.theme_mode = "dark"
 
         self.shadow_enabled = False
         self.auto_rotate_enabled = False
@@ -76,18 +79,18 @@ class Viewer3DPage(QWidget):
 
         self.view_btn = QPushButton("👁️ Перспектива")
         self.view_btn.setObjectName("MainButton")
-        self.view_btn.setMinimumHeight(44)
         self.view_btn.clicked.connect(self.cycle_view_mode)
         bottom_controls.addWidget(self.view_btn)
 
-
         self.wire_btn = QPushButton("🔳 Wireframe/Solid")
-        self.wire_btn.setStyleSheet(BUTTON_STYLE)
+        self.wire_btn.setObjectName("MainButton")
         self.wire_btn.setCheckable(True)
+        self.wire_btn.setChecked(False)
         self.wire_btn.clicked.connect(self.toggle_wireframe)
         bottom_controls.addWidget(self.wire_btn)
 
         self.smooth_btn = QPushButton("🟢 Гладке освітлення")
+        self.smooth_btn.setObjectName("MainButton")
         self.smooth_btn.setCheckable(True)
         self.smooth_btn.setChecked(True)
         self.smooth_btn.clicked.connect(self.toggle_smooth_shading)
@@ -95,17 +98,13 @@ class Viewer3DPage(QWidget):
 
         self.btn_rotate = QPushButton("🔄 Автовертіння")
         self.btn_rotate.setObjectName("MainButton")
-        self.btn_rotate.setMinimumHeight(44)
         self.btn_rotate.setCheckable(True)
+        self.btn_rotate.setChecked(False)
         self.btn_rotate.clicked.connect(self.toggle_auto_rotate)
         bottom_controls.addWidget(self.btn_rotate)
 
-
-
         center_layout.addLayout(bottom_controls)
         content_layout.addLayout(center_layout)
-
-
 
         # --- Left Controls (Azimuth) ---
         left_controls = QVBoxLayout()
@@ -120,6 +119,11 @@ class Viewer3DPage(QWidget):
         content_layout.addLayout(left_controls)
 
         main_layout.addLayout(content_layout)
+        self.setLayout(main_layout)
+
+        # --- Встановлюємо стиль теми за замовчуванням ---
+  #      self.set_dark_theme()
+
 
     # --- ФУНКЦІЇ КНОПОК І ЛОГІКА ---
     def cycle_view_mode(self):
@@ -134,8 +138,6 @@ class Viewer3DPage(QWidget):
             self.view_btn.setText("➡️ Збоку")
         if hasattr(self, 'gl_widget'):
             self.gl_widget.set_view_mode(self.current_view_mode)
-
-
 
     def toggle_auto_rotate(self):
         self.auto_rotate_enabled = not self.auto_rotate_enabled
@@ -221,7 +223,6 @@ class Viewer3DPage(QWidget):
             for face in faces:
                 f.write(f"{len(face)} {' '.join(str(idx) for idx in face)}\n")
 
-
     def toggle_smooth_shading(self):
         self.gl_widget.toggle_smooth_shading()
         if self.gl_widget.smooth_shading:
@@ -230,4 +231,3 @@ class Viewer3DPage(QWidget):
         else:
             self.smooth_btn.setText("🔲 Плоске освітлення")
             self.smooth_btn.setChecked(False)
-

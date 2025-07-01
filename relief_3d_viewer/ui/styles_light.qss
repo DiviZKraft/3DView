@@ -1,71 +1,77 @@
+/* === Основне вікно (фон, текст) === */
 QWidget {
-    background-color: #f8f8f8;
-    color: #222;
-    font-size: 16px;
+    background-color: #f8f8f8;  /* Світлий фон головного вікна */
+    color: #222;                /* Темно-сірий текст */
+    font-size: 16px;            /* Базовий розмір тексту */
 }
 
+/* === Верхній тулбар (панель інструментів) === */
 QToolBar {
-    background: #f0f0f0;
-    spacing: 8px;
-    border-bottom: 1px solid #d0d0d0;
+    background: #f0f0f0;                /* Світлий фон тулбара */
+    spacing: 8px;                       /* Відстань між елементами тулбара */
+    border-bottom: 1px solid #d0d0d0;   /* Світло-сіра лінія під тулбаром */
 }
 
+/* === Фон головної сторінки (HomePageBg) === */
 #HomePageBg {
-    background-color: #f0f0f0;
-    border-radius: 16px;
+    background-color: #f0f0f0;  /* Той самий світлий колір, що й тулбар */
+    border-radius: 16px;        /* Округлені кути для блоку */
 }
 
+/* === Підписи (всі QLabel) === */
 QLabel {
-    font-family: "Segoe UI", "Arial", sans-serif;
-    letter-spacing: 0.1em;
-    font-size: 18px;
-    color: #1b1b1b;      /* Текст темний! */
+    font-family: "Segoe UI", "Arial", sans-serif;  /* Сучасний шрифт */
+    letter-spacing: 0.1em;                         /* Відстань між літерами */
+    font-size: 18px;                               /* Збільшений розмір тексту */
+    color: #1b1b1b;                                /* Дуже темний текст для контрасту */
 }
 
+/* === Звичайні кнопки === */
 QPushButton {
-    background-color: #e7e7e7;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 10px;
-    color: #1b1b1b;
-}
-QPushButton:checked {
-    background-color: #aac6ff;
-}
-QPushButton:hover {
-    background-color: #e0e0e0;
+    background-color: #eaeaea;   /* Світло-сірий фон кнопки */
+    color: #222;                 /* Темно-сірий текст */
+    border-radius: 8px;          /* Округлені кути */
+    font-size: 16px;             /* Розмір тексту */
+    padding: 8px 18px;           /* Відступ всередині кнопки */
 }
 
+/* --- Стан кнопки "натиснута/активна" --- */
+QPushButton:checked {
+    background-color: #81d4fa;   /* Блакитний фон для активної кнопки */
+    color: #222;                 /* Темно-сірий текст */
+}
+
+/* --- Стан кнопки при наведенні мишкою --- */
+QPushButton:hover {
+    background-color: #e0e0e0;   /* Трохи темніший сірий при наведенні */
+}
+
+/* === УНІФІКОВАНИЙ СТИЛЬ ДЛЯ ВСІХ ГОЛОВНИХ КНОПОК === */
 QPushButton#MainButton {
-    background-color: #d1d1d1;
-    color: #232323;
-    border-radius: 9px;
-    border: 1.5px solid #b6b6b6;
-    font-size: 18px;
-    padding: 10px 28px;
+    background-color: #d1d1d1;     /* Основний світло-сірий фон */
+    color: #232323;                /* Темний текст */
+    border-radius: 9px;            /* Округлені кути */
+    border: 1.5px solid #b6b6b6;   /* Сіра рамка */
+    font-size: 18px;               /* Збільшений розмір шрифту */
+    padding: 10px 28px;            /* Більші відступи */
     font-family: "Segoe UI", "Arial", sans-serif;
     font-weight: 500;
-    margin-bottom: 2px;
-    box-shadow: 0 3px 12px rgba(60,60,60,0.06);
-    transition: background 0.25s;
-}
-QPushButton#MainButton:hover {
-    background-color: #e5e5e5;
-    border-color: #999;
+    margin-bottom: 2px;            /* Відступ знизу */
+    box-shadow: 0 3px 12px rgba(60,60,60,0.06);    /* Легка сіра тінь */
+    transition: background 0.25s;  /* Плавна зміна кольору */
+    min-width: 170px;              /* Всі головні кнопки однакового розміру */
+    min-height: 30px;              /* Фіксована висота */
+    max-height: 30px;              /* Фіксована висота */
 }
 
-QPushButton#AccentButton {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffe9b2, stop:1 #8be0f9);
-    color: #444;
-    border-radius: 14px;
-    border: none;
-    font-size: 17px;
-    font-family: "Segoe UI", "Arial", sans-serif;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    box-shadow: 0 2px 14px rgba(200,180,100,0.11);
+/* --- Головна кнопка при наведенні мишкою --- */
+QPushButton#MainButton:hover {
+    background-color: #e5e5e5;   /* Трохи світліший фон при наведенні */
+    border-color: #999;          /* Темніша рамка */
 }
-QPushButton#AccentButton:hover {
-    background: #cbefff;
-    color: #222;
+
+/* --- Головна кнопка у стані "активна/checked" --- */
+QPushButton#MainButton:checked {
+    background-color: #81d4fa;   /* Такий самий блакитний, як у простих кнопок */
+    color: #222;                 /* Темний текст */
 }
