@@ -1,12 +1,17 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFileDialog, QSlider, QToolBar, QAction, QSizePolicy
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFileDialog,
+    QSlider, QToolBar, QAction, QSizePolicy, QMessageBox, QColorDialog
+)
 from PyQt5.QtCore import Qt, QSize
 from widgets.simple_gl_widget import SimpleGLWidget
 from ui.theme_manager import ThemeManager
 from ui.constants import BUTTON_STYLE, LABEL_STYLE
-from ui.theme_manager import ThemeManager
+import os
 
-from PyQt5.QtWidgets import QColorDialog, QAction
 class Viewer3DPage(QWidget):
+    """
+    Сторінка з 3D-рендером, керуванням камерою, експортом, зміною фону.
+    """
     def __init__(self, go_back_callback):
         super().__init__()
         self.go_back_callback = go_back_callback
@@ -20,8 +25,8 @@ class Viewer3DPage(QWidget):
         screenshot_btn.triggered.connect(self.save_screenshot)
         toolbar.addAction(screenshot_btn)
 
-        export_btn = QAction("📝 Експорт", self)
-        export_btn.triggered.connect(self.export_info)
+        export_btn = QAction("💾 Експортувати як...", self)
+        export_btn.triggered.connect(self.export_model_dialog)
         toolbar.addAction(export_btn)
 
         color_action = QAction("🎨 Колір фону", self)
@@ -114,14 +119,6 @@ class Viewer3DPage(QWidget):
         if file:
             img.save(file)
 
-    def export_info(self):
-        vertices, faces = self.gl_widget.model
-        file, _ = QFileDialog.getSaveFileName(self, "Експортувати інфо", "model_info.txt", "Text (*.txt)")
-        if file:
-            with open(file, "w", encoding="utf-8") as f:
-                f.write(f"Вершин: {len(vertices)}\n")
-                f.write(f"Граней: {len(faces)}\n")
-
     def set_light_angle(self, value, mode):
         if mode == 'az':
             self.gl_widget.light_azimuth = value
@@ -137,3 +134,47 @@ class Viewer3DPage(QWidget):
         if col.isValid():
             r, g, b, _ = col.getRgbF()
             self.gl_widget.set_background_color(r, g, b, 1.0)
+
+    def export_model_dialog(self):
+        vertices, faces = self.gl_widget.model
+        if not vertices or not faces:
+            QMessageBox.warning(self, "Експорт", "Модель не завантажена!")
+            return
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self, "Експортувати модель", "model",
+            "OBJ файли (*.obj);;PLY файли (*.ply)"
+        )
+        if not file_path:
+            return
+        ext = os.path.splitext(file_path)[1].lower()
+        try:
+            if ext == ".obj":
+                self.export_obj(vertices, faces, file_path)
+            elif ext == ".ply":
+                self.export_ply(vertices, faces, file_path)
+            else:
+                QMessageBox.warning(self, "Експорт", "Непідтримуваний формат!")
+                return
+            QMessageBox.information(self, "Експорт", "Експорт виконано успішно!")
+        except Exception as e:
+            QMessageBox.critical(self, "Експорт", f"Помилка експорту: {e}")
+
+    def export_obj(self, vertices, faces, file_path):
+        with open(file_path, "w", encoding="utf-8") as f:
+            for v in vertices:
+                f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+            for face in faces:
+                indices = [str(idx + 1) for idx in face]
+                f.write(f"f {' '.join(indices)}\n")
+
+    def export_ply(self, vertices, faces, file_path):
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("ply\nformat ascii 1.0\n")
+            f.write(f"element vertex {len(vertices)}\n")
+            f.write("property float x\nproperty float y\nproperty float z\n")
+            f.write(f"element face {len(faces)}\n")
+            f.write("property list uchar int vertex_indices\nend_header\n")
+            for v in vertices:
+                f.write(f"{v[0]} {v[1]} {v[2]}\n")
+            for face in faces:
+                f.write(f"{len(face)} {' '.join(str(idx) for idx in face)}\n")

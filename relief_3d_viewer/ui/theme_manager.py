@@ -2,6 +2,9 @@ import os
 from PyQt5.QtWidgets import QApplication
 
 class ThemeManager:
+    """
+    Singleton для перемикання теми (dark/light) для всього додатку.
+    """
     _instance = None
     _callbacks = []
 
@@ -23,7 +26,7 @@ class ThemeManager:
         self.dark_mode = not self.dark_mode
         self.apply_current_theme()
         for cb in self._callbacks:
-            cb(self.dark_mode)   # Повідомляємо всіх віджетів про зміну теми
+            cb(self.dark_mode)
 
     def apply_current_theme(self):
         if self.dark_mode:
@@ -32,12 +35,13 @@ class ThemeManager:
             self.apply_light_theme()
 
     def apply_dark_qss(self):
-        qss_path = os.path.join(os.path.dirname(__file__), "styles.qss")
+        qss_path = os.path.join(os.path.dirname(__file__), "styles_dark.qss")
         if os.path.exists(qss_path):
             with open(qss_path, "r", encoding="utf-8") as f:
                 QApplication.instance().setStyleSheet(f.read())
 
     def apply_light_theme(self):
-        QApplication.instance().setStyleSheet("")
-        palette = QApplication.style().standardPalette()
-        QApplication.instance().setPalette(palette)
+        qss_path = os.path.join(os.path.dirname(__file__), "styles_light.qss")
+        if os.path.exists(qss_path):
+            with open(qss_path, "r", encoding="utf-8") as f:
+                QApplication.instance().setStyleSheet(f.read())

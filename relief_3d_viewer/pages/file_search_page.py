@@ -2,11 +2,14 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QFileDialog, QLab
 from ui.constants import BUTTON_STYLE, LABEL_STYLE
 
 class FileSearchPage(QWidget):
+    """
+    Сторінка вибору файлу для перегляду (OBJ/PLY).
+    """
     def __init__(self, main_window):
         super().__init__()
         self.main_window = main_window
         layout = QVBoxLayout()
-        label = QLabel("Оберіть файл .obj або .fbx для перегляду")
+        label = QLabel("Оберіть файл .obj або .ply для перегляду")
         label.setStyleSheet(LABEL_STYLE)
         layout.addWidget(label)
 
@@ -19,6 +22,6 @@ class FileSearchPage(QWidget):
 
     def choose_file(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Виберіть файл", "", "OBJ/FBX Files (*.obj *.fbx)")
+            self, "Виберіть файл", "", "OBJ/PLY Files (*.obj *.ply)")
         if file_path:
             self.main_window.open_3d_viewer(file_path)
