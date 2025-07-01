@@ -1,24 +1,19 @@
 import os
 import math
+import numpy as np
 from PyQt5.QtWidgets import QOpenGLWidget, QMessageBox
 from PyQt5.QtCore import Qt
 from OpenGL.GL import *
 from OpenGL.GLU import *
-from PIL import Image
 from utils.model_loader import load_obj_with_texture, load_ply
 
 class SimpleGLWidget(QOpenGLWidget):
-    """
-    OpenGL-виджет для рендеру 3D-моделі (OBJ/PLY).
-    """
     def __init__(self, info_label):
         super().__init__()
         self.model = ([], [])
         self.texture_id = None
         self.wireframe = False
-        self.show_normals = False
-        self.show_texture = True
-        self.background_color = (0.1, 0.1, 0.1, 1.0)
+        self.background_color = (0.93, 1, 0.93, 1.0)
         self.target = [0.0, 0.0, 0.0]
         self.distance = 5.0
         self.azimuth = 45.0
@@ -30,9 +25,14 @@ class SimpleGLWidget(QOpenGLWidget):
         self.last_x = 0
         self.last_y = 0
         self.info_label = info_label
+        self.model_rotation_y = 0.0
 
-        self.model_rotation_y = 0.0      # Для автовертіння!
-        self.shadow_enabled = False      # Для відображення тіні
+        # Нові масиви
+        self._vertex_array = None
+        self._normal_array = None
+        self._tri_index_array = None
+        self._quad_index_array = None
+        self.view_mode = 0  # 0 = перспектива
 
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMouseTracking(True)
@@ -46,33 +46,58 @@ class SimpleGLWidget(QOpenGLWidget):
         try:
             if ext == ".obj":
                 self.model, texture_path = load_obj_with_texture(path)
-                if texture_path and os.path.exists(texture_path):
-                    self.load_texture(texture_path)
-                else:
-                    self.texture_id = None
             elif ext == ".ply":
                 self.model = load_ply(path)
-                self.texture_id = None
             else:
                 raise ValueError("Непідтримуваний формат файлу.")
             self.reset_view_to_model()
+            self.prepare_arrays()
             self.update_info()
             self.update()
         except Exception as e:
             QMessageBox.critical(self, "Помилка моделі", str(e))
 
-    def load_texture(self, image_path):
-        try:
-            image = Image.open(image_path).transpose(Image.FLIP_TOP_BOTTOM)
-            img_data = image.convert("RGB").tobytes()
-            width, height = image.size
-            self.texture_id = glGenTextures(1)
-            glBindTexture(GL_TEXTURE_2D, self.texture_id)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
-        except Exception:
-            self.texture_id = None
+    def prepare_arrays(self):
+        vertices, faces = self.model
+        if not vertices or not faces:
+            self._vertex_array = None
+            self._normal_array = None
+            self._tri_index_array = None
+            self._quad_index_array = None
+            return
+
+        self._vertex_array = np.array(vertices, dtype=np.float32)
+
+        # Розбиваємо на трикутники та чотирикутники
+        triangles = []
+        quads = []
+        for f in faces:
+            if len(f) == 3:
+                triangles.append(f)
+            elif len(f) == 4:
+                quads.append(f)
+            elif len(f) > 4:
+                # Якщо полігон багатокутник, розбити на трикутники fan'ом
+                for i in range(1, len(f)-1):
+                    triangles.append([f[0], f[i], f[i+1]])
+        self._tri_index_array = np.array(triangles, dtype=np.uint32).flatten() if triangles else None
+        self._quad_index_array = np.array(quads, dtype=np.uint32).flatten() if quads else None
+
+        # --- Генеруємо нормалі для вершин (гладко) ---
+        # Сума всіх нормалей полігонів, що містять цю вершину
+        vertex_normals = [np.zeros(3, dtype=np.float32) for _ in vertices]
+        for f in faces:
+            verts = [np.array(vertices[i]) for i in f]
+            if len(verts) < 3: continue
+            v1 = verts[1] - verts[0]
+            v2 = verts[2] - verts[0]
+            n = np.cross(v1, v2)
+            n = n / (np.linalg.norm(n) if np.linalg.norm(n) != 0 else 1)
+            for idx in f:
+                vertex_normals[idx] += n
+        # Нормалізуємо вектори
+        vertex_normals = [n / (np.linalg.norm(n) if np.linalg.norm(n) != 0 else 1) for n in vertex_normals]
+        self._normal_array = np.array(vertex_normals, dtype=np.float32)
 
     def update_info(self):
         vertices, faces = self.model
@@ -94,6 +119,15 @@ class SimpleGLWidget(QOpenGLWidget):
         glEnable(GL_LIGHT0)
         glEnable(GL_NORMALIZE)
         glShadeModel(GL_SMOOTH)
+        self.setup_materials()
+
+    def setup_materials(self):
+        diffuse = [0.82, 0.82, 0.82, 1.0]
+        ambient = [0.32, 0.32, 0.32, 1.0]
+        glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse)
+        glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient)
+        glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
+        glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 1)
 
     def resizeGL(self, w, h):
         glViewport(0, 0, w, h)
@@ -109,39 +143,41 @@ class SimpleGLWidget(QOpenGLWidget):
         eye = self.get_camera_position()
         gluLookAt(*eye, *self.target, 0, 1, 0)
         self.update_light()
-        glRotatef(self.model_rotation_y, 0, 1, 0)  # обертання моделі по Y
+        glRotatef(self.model_rotation_y, 0, 1, 0)
 
-        vertices, faces = self.model
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+        # --- Оптимізований рендер ---
+        if self._vertex_array is not None and self._normal_array is not None:
+            glEnableClientState(GL_VERTEX_ARRAY)
+            glEnableClientState(GL_NORMAL_ARRAY)
+            glVertexPointer(3, GL_FLOAT, 0, self._vertex_array)
+            glNormalPointer(GL_FLOAT, 0, self._normal_array)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
 
-        # Проста тінь під моделлю (емулюємо через чорний диск)
-        if self.shadow_enabled:
-            glPushMatrix()
-            glTranslatef(self.target[0], min([v[1] for v in vertices]) - 0.05, self.target[2])
-            glColor4f(0.0, 0.0, 0.0, 0.3)
-            self.draw_shadow_circle()
-            glPopMatrix()
+            # Трикутники
+            if self._tri_index_array is not None:
+                glDrawElements(GL_TRIANGLES, len(self._tri_index_array), GL_UNSIGNED_INT, self._tri_index_array)
+            # Чотирикутники
+            if self._quad_index_array is not None:
+                glDrawElements(GL_QUADS, len(self._quad_index_array), GL_UNSIGNED_INT, self._quad_index_array)
 
-        for face in faces:
-            if len(face) < 3: continue
-            glBegin(GL_POLYGON)
-            face_vertices = [vertices[i] for i in face]
-            normal = self.compute_face_normal(face_vertices)
-            glNormal3fv(normal)
-            glColor3f(0.8, 0.8, 0.8)
-            for v in face_vertices:
-                glVertex3fv(v)
-            glEnd()
-
-    def draw_shadow_circle(self, radius=1.0, segments=64):
-        glBegin(GL_TRIANGLE_FAN)
-        glVertex3f(0.0, 0.0, 0.0)
-        for i in range(segments + 1):
-            angle = 2 * math.pi * i / segments
-            x = radius * math.cos(angle)
-            z = radius * math.sin(angle)
-            glVertex3f(x, 0.0, z)
-        glEnd()
+            glDisableClientState(GL_VERTEX_ARRAY)
+            glDisableClientState(GL_NORMAL_ARRAY)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        else:
+            # Fallback (дуже повільний спосіб)
+            vertices, faces = self.model
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE if self.wireframe else GL_FILL)
+            for face in faces:
+                if len(face) < 3: continue
+                glBegin(GL_POLYGON)
+                face_vertices = [vertices[i] for i in face]
+                normal = self.compute_face_normal(face_vertices)
+                glNormal3fv(normal)
+                glColor3f(0.8, 0.8, 0.8)
+                for v in face_vertices:
+                    glVertex3fv(v)
+                glEnd()
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
     def set_clear_color(self):
         r, g, b, a = self.background_color
@@ -173,19 +209,21 @@ class SimpleGLWidget(QOpenGLWidget):
         x = math.cos(el) * math.cos(az)
         y = math.sin(el)
         z = math.cos(el) * math.sin(az)
-        glLightfv(GL_LIGHT0, GL_POSITION, [x * 10, y * 10, z * 10, 1.0])
+        direction = [x, y, z, 0.0]
+        glLightfv(GL_LIGHT0, GL_POSITION, direction)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
-        glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+        glLightfv(GL_LIGHT0, GL_AMBIENT, [0.23, 0.23, 0.23, 1.0])
+        glLightfv(GL_LIGHT0, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
 
-    # --- Управління камерою мишею ---
+    # --- Управління камерою ---
     def mousePressEvent(self, event):
-        if event.button() == Qt.MiddleButton:
+        if event.button() == Qt.MiddleButton or event.button() == Qt.LeftButton:
             self.middle_button_pressed = True
         self.last_x = event.x()
         self.last_y = event.y()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MiddleButton:
+        if event.button() == Qt.MiddleButton or event.button() == Qt.LeftButton:
             self.middle_button_pressed = False
 
     def mouseMoveEvent(self, event):
@@ -196,8 +234,12 @@ class SimpleGLWidget(QOpenGLWidget):
                 self.pan_camera(dx, dy)
             else:
                 self.azimuth += dx * 0.5
-                self.elevation += dy * 0.5
-                self.elevation = max(-89, min(89, self.elevation))
+                if self.view_mode == 0:
+                    self.elevation += dy * 0.5
+                    self.elevation = max(-35, min(35, self.elevation))
+                else:
+                    self.elevation += dy * 0.5
+                    self.elevation = max(-89, min(89, self.elevation))
             self.update()
         self.last_x = event.x()
         self.last_y = event.y()
@@ -221,18 +263,15 @@ class SimpleGLWidget(QOpenGLWidget):
         if event.key() == Qt.Key_Shift:
             self.shift_pressed = False
 
-    # --- Нові методи для твоїх кнопок ---
     def set_shadow(self, enabled):
-        self.shadow_enabled = enabled
+        pass  # тіні не реалізовані тут
 
     def rotate_y(self, angle):
         self.model_rotation_y = (self.model_rotation_y + angle) % 360
         self.update()
 
     def set_view_mode(self, mode):
-        """
-        mode: 0 - перспектива, 1 - зверху, 2 - знизу, 3 - збоку
-        """
+        self.view_mode = mode
         if mode == 0:
             self.set_perspective_camera()
         elif mode == 1:
