@@ -1,11 +1,20 @@
 import sys
+import os
 from PyQt5.QtWidgets import QApplication, QMainWindow, QStackedWidget, QFileDialog
 from pages.home_page import HomePage
 from pages.viewer_3d_page import Viewer3DPage
 from pages.file_search_page import FileSearchPage
 from utils.last_path import load_last_path, save_last_path
-import os
 from ui.theme_manager import ThemeManager
+
+def resource_path(relative_path):
+    """
+    Універсальна функція для знаходження шляху до ресурсів (QSS, іконки, файли)
+    Працює як у PyInstaller, так і у dev-режимі.
+    """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 class MainWindow(QMainWindow):
     """
@@ -21,9 +30,9 @@ class MainWindow(QMainWindow):
         self.stacked_widget = QStackedWidget()
         self.setCentralWidget(self.stacked_widget)
 
-        # Менеджер теми (синглтон)
+        # --- Менеджер теми ---
         self.theme_manager = ThemeManager()
-        self.theme_manager.apply_current_theme()  # застосування теми при старті
+        self.apply_stylesheet()  # застосування теми при старті
 
         # --- Ініціалізація сторінок ---
         self.home_page = HomePage(
@@ -42,6 +51,16 @@ class MainWindow(QMainWindow):
 
         # Відразу показуємо домашню сторінку
         self.switch_page("home")
+
+    def apply_stylesheet(self):
+        """
+        Завантажує і застосовує QSS-стилі для всього додатку.
+        """
+        # !!! ВАЖЛИВО: Шлях повинен співпадати з --add-data !!!
+        style_path = resource_path("relief_3d_viewer/ui/styles.qss")
+        if os.path.exists(style_path):
+            with open(style_path, "r", encoding="utf-8") as style_file:
+                self.setStyleSheet(style_file.read())
 
     def switch_page(self, name):
         """
@@ -77,16 +96,17 @@ class MainWindow(QMainWindow):
 
     def toggle_theme(self):
         """
-        Перемикає тему (темна/світла) за допомогою ThemeManager.
+        Перемикає тему (темна/світла) за допомогою ThemeManager і перезавантажує QSS.
         """
         self.theme_manager.toggle_theme()
+        self.apply_stylesheet()
 
 
 if __name__ == "__main__":
-    # Старт додатку
     app = QApplication(sys.argv)
     theme_manager = ThemeManager()
-    theme_manager.apply_current_theme()
+    theme_manager.apply_current_theme()  # тільки тут!
+    # ...далі створення MainWindow та інше
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())

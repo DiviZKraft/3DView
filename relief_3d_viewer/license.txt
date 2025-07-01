@@ -1,0 +1,32 @@
+Ліцензійна угода щодо використання програми "3D Model Viewer (3DMV)"
+
+Автор: Vynnyk Dmytro
+Email: Vynnyk.D.V@nmu.one
+
+УВАГА! Будь ласка, уважно прочитайте цю ліцензійну угоду перед встановленням і використанням даної програми.
+
+1. Програма "3D Model Viewer (3DMV)" надається безкоштовно для особистого й некомерційного використання.
+2. Забороняється поширювати програму з метою отримання прибутку без письмової згоди автора.
+3. Програма надається "як є", без жодних гарантій.
+4. Автор не несе відповідальності за можливу втрату даних або будь-які наслідки використання програми.
+5. Всі права на програму належать її автору.
+
+Встановлюючи цю програму, ви погоджуєтесь з умовами цієї ліцензії.
+
+
+
+
+License Agreement for "3D Model Viewer (3DMV)"
+
+Author: Vynnyk Dmytro
+Email: Vynnyk.D.V@nmu.one
+
+PLEASE READ THIS LICENSE AGREEMENT CAREFULLY BEFORE INSTALLING OR USING THIS SOFTWARE.
+
+1. "3D Model Viewer (3DMV)" is provided free of charge for personal and non-commercial use only.
+2. It is prohibited to distribute the program for profit without the author's written permission.
+3. This software is provided "as is", without any warranties.
+4. The author is not responsible for any data loss or consequences resulting from using the program.
+5. All rights to this program belong to the author.
+
+By installing this software, you agree to the terms of this license.
