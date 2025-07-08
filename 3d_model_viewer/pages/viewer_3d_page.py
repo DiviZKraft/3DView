@@ -20,7 +20,6 @@ class Viewer3DPage(QWidget):
     def __init__(self, go_back_callback):
         super().__init__()
         self.go_back_callback = go_back_callback    # Колбек для повернення на попередню сторінку
-        self.theme_mode = "dark"                   # Поточний режим теми
 
         self.shadow_enabled = False                # (зарезервовано під тіні)
         self.auto_rotate_enabled = False           # Автоматичне обертання моделі
